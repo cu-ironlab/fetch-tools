@@ -7,7 +7,7 @@ class InputController():
 	"""
 
 	def __init__(self, spec):
-		self.spec_etree = spec
+		self.spec_etree = spec.getroot()
 		self.create_control_dict()
 
 	def create_control_dict(self):
@@ -30,4 +30,22 @@ class InputController():
 		</data>
 		"""
 		self.control_dict = {}
-		#TODO: parse xml file into dict
+		for input_signal in self.spec_etree.iter('input'):
+			input_name = input_signal.attrib['name']
+			inputs = []
+			input_types = []
+			for x_in in input_signal.iter('type'):
+				input_types.append(x_in.text)
+				inputs.append(None)
+			self.control_dict[input_name]["types"] = input_types
+			self.control_dict[input_name]["inputs"] = inputs
+
+	def update_control_signal(self, signal_name, signal_update):
+		self.control_dict[signal_name]["inputs"] = signal_update
+		#check for input type match here? or somewhere else?
+
+	def get_all_controls(self):
+		return self.control_dict
+
+	def get_control_signal(self, signal_name):
+		return self.control_dict[signal_name]
