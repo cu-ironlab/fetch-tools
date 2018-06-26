@@ -1,0 +1,4 @@
+<launch>
+	<node name="controller_publisher" pkg="human_controller_interface" type="controller_publisher.py" args="$(find human_controller_interface)/config/cartesian.xml $(find human_controller_interface)/config/cartesian_keyboard.xml 10"/>
+	<node name="cartesian_keyboard_controller" pkg="human_controller_interface" type="cartesian_keyboard_controller" />
+</launch>

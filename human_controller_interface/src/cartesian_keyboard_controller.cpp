@@ -1,7 +1,9 @@
 #include "ros/ros.h"
-#include "CartesianControls.h"
+#include "geometry_msgs/PoseStamped.h"
 
-#include <moveit/move_group_interface/move_group_interface.h>
+#include <fetch_custom_msgs/CartesianControls.h>
+
+#include <moveit/move_group_interface/move_group.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 
 #include <moveit_msgs/DisplayRobotState.h>
@@ -11,19 +13,19 @@
 #include <moveit_msgs/CollisionObject.h>
 
 float update_rate = 15.0;
-float[] update_gains = [0.001, 0.001, 0.1];
+float update_gains [3] = {0.001, 0.001, 0.1};
 
 static const std::string PLANNING_GROUP = "arm_with_torso";
-moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
-moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-const robot_state::JointModelGroup joint_model_group = move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
+moveit::planning_interface::MoveGroup* move_group;
+moveit::planning_interface::PlanningSceneInterface* planning_scene_interface;
+const robot_state::JointModelGroup* joint_model_group;
 
 void addCollisionObjects()
 {
 	std::vector<moveit_msgs::CollisionObject> collision_objects;
 	//front ground
 	moveit_msgs::CollisionObject c_o1;
-	c_o1.header.frame_id = move_group.getPlanningFrame();
+	c_o1.header.frame_id = move_group->getPlanningFrame();
 	c_o1.id = "front_ground";
 	shape_msgs::SolidPrimitive primitive1;
 	primitive1.type = primitive1.BOX;
@@ -44,7 +46,7 @@ void addCollisionObjects()
 
 	//back ground
 	moveit_msgs::CollisionObject c_o2;
-	c_o2.header.frame_id = move_group.getPlanningFrame();
+	c_o2.header.frame_id = move_group->getPlanningFrame();
 	c_o2.id = "back_ground";
 	shape_msgs::SolidPrimitive primitive2;
 	primitive2.type = primitive2.BOX;
@@ -65,7 +67,7 @@ void addCollisionObjects()
 
 	//left ground
 	moveit_msgs::CollisionObject c_o3;
-	c_o3.header.frame_id = move_group.getPlanningFrame();
+	c_o3.header.frame_id = move_group->getPlanningFrame();
 	c_o3.id = "left_ground";
 	shape_msgs::SolidPrimitive primitive3;
 	primitive3.type = primitive3.BOX;
@@ -86,7 +88,7 @@ void addCollisionObjects()
 
 	//right_ground
 	moveit_msgs::CollisionObject c_o4;
-	c_o4.header.frame_id = move_group.getPlanningFrame();
+	c_o4.header.frame_id = move_group->getPlanningFrame();
 	c_o4.id = "front_ground";
 	shape_msgs::SolidPrimitive primitive4;
 	primitive4.type = primitive4.BOX;
@@ -105,18 +107,26 @@ void addCollisionObjects()
 
 	collision_objects.push_back(c_o4);
 	
-	planning_scene_interface.addCollisionObjects(collision_objects);
+	planning_scene_interface->addCollisionObjects(collision_objects);
 }
 
-void updateControlSignal(const CartesianControls::ConstPtr& msg)
+void updateControlSignal(const fetch_custom_msgs::CartesianControls::ConstPtr& msg)
 {
-	
+	float x = msg->x_axis;
+	geometry_msgs::PoseStamped c_pose = move_group->getCurrentPose("wrist_roll_link");
+	ROS_INFO("[%s]", "here");
 }
 
 int main(int argc, char **argv)
 {
-	ros::init(argc, argv, "keyboard_controller");
+	ros::init(argc, argv, "cartesian_keyboard_controller");
 	ros::NodeHandle nh;
+
+	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
+	planning_scene_interface = new moveit::planning_interface::PlanningSceneInterface();
+	joint_model_group = move_group->getCurrentState()->getJointModelGroup(PLANNING_GROUP);
+
 	addCollisionObjects();
-	ros::Subscriber sub = nh.subscribe("control_signal", 1, updateControlSignal)
+	ros::Subscriber sub = nh.subscribe("control_signal", 1, updateControlSignal);
+	ros::spinOnce();
 }

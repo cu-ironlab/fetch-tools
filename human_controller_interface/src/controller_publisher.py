@@ -7,7 +7,7 @@ import KeyboardController
 from moveit_msgs.msg import MoveItErrorCodes
 from moveit_python import MoveGroupInterface, PlanningSceneInterface
 from geometry_msgs.msg import PoseStamped, Pose, Point, Quaternion
-import CartesianControls
+from fetch_custom_msgs.msg import CartesianControls
 
 def start_node():
 	myargv = rospy.myargv(argv=sys.argv)
@@ -16,7 +16,7 @@ def start_node():
 		sys.exit(-1)
 	controller_spec = xml.etree.ElementTree.parse(myargv[1])
 	keyboard_spec = xml.etree.ElementTree.parse(myargv[2])
-	kc = KeyboardController.DiscreteKeyboardController(control_spec, keyboard_spec)
+	kc = KeyboardController.DiscreteKeyboardController(controller_spec, keyboard_spec)
 	kc.start_listener()
 	return kc, int(myargv[3])
 

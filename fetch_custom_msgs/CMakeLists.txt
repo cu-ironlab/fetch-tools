@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(human_controller_interface)
+project(fetch_custom_msgs)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -8,16 +8,10 @@ project(human_controller_interface)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  moveit_core
-  moveit_ros_planning
-  moveit_ros_planning_interface
-  pluginlib
+  message_generation
   moveit_msgs
-  moveit_python
-  roscpp
-  rospy
   std_msgs
-  fetch_custom_msgs
+  geometry_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -54,10 +48,12 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-#add_message_files(
-#  FILES
+add_message_files(
+  FILES
+  CartesianControls.msg
+#   Message1.msg
 #   Message2.msg
-#)
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -74,11 +70,10 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate added messages and services with any dependencies listed here
-#generate_messages(
-#  CartesianControls.msg
-#   DEPENDENCIES
-#   moveit_msgs#   std_msgs
-#)
+generate_messages(
+  DEPENDENCIES
+  std_msgs  # Or other packages containing msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -111,8 +106,8 @@ find_package(catkin REQUIRED COMPONENTS
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES human_controller_interface
- CATKIN_DEPENDS moveit_core moveit_ros_planning_interface moveit_msgs moveit_python roscpp rospy std_msgs 
+#  LIBRARIES fetch_custom_msgs
+#  CATKIN_DEPENDS other_catkin_pkg
 #  DEPENDS system_lib
 )
 
@@ -124,15 +119,12 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
 # include
-  ${catkin_INCLUDE_DIRS}
+# ${catkin_INCLUDE_DIRS}
 )
-
-add_executable(cartesian_keyboard_controller src/cartesian_keyboard_controller.cpp)
-target_link_libraries(cartesian_keyboard_controller ${catkin_LIBRARIES})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/human_controller_interface.cpp
+#   src/${PROJECT_NAME}/fetch_custom_msgs.cpp
 # )
 
 ## Add cmake target dependencies of the library
@@ -143,7 +135,7 @@ target_link_libraries(cartesian_keyboard_controller ${catkin_LIBRARIES})
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-# add_executable(${PROJECT_NAME}_node src/human_controller_interface_node.cpp)
+# add_executable(${PROJECT_NAME}_node src/fetch_custom_msgs_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -200,7 +192,7 @@ target_link_libraries(cartesian_keyboard_controller ${catkin_LIBRARIES})
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_human_controller_interface.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_fetch_custom_msgs.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()

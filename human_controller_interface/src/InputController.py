@@ -17,11 +17,13 @@ class InputController():
 			x_in = input_signal.find('type')
 			self.control_dict[input_name] = {}
 			self.control_dict[input_name]["type"] = x_in.text
-			self.control_dict[input_name]["input"] = None
+
+			#TODO: change default value based on type
+			self.control_dict[input_name]["input"] = 0.0
 
 	def update_control_signal(self, signal_name, signal_update):
-		self.control_dict[signal_name]["input"] = signal_update
-		#check for input type match here? or somewhere else?
+		#TODO: convert to input type match here? or somewhere else?
+		self.control_dict[signal_name]["input"] = float(signal_update)
 
 	def get_all_controls(self):
 		return self.control_dict
