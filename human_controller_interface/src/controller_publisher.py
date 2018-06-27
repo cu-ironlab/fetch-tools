@@ -34,3 +34,4 @@ if __name__ == '__main__':
     	control_msg.z_axis = controls["z_axis"]["input"]
     	pub.publish(control_msg)
     	rate.sleep()
+    kc.stop_listener()

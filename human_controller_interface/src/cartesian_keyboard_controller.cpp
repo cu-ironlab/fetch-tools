@@ -13,7 +13,8 @@
 #include <moveit_msgs/CollisionObject.h>
 
 float update_rate = 15.0;
-float update_gains [3] = {0.001, 0.001, 0.1};
+float update_gains [3] = {0.05, 0.05, 0.05};
+float control_signals [3] = {0.0, 0.0, 0.0};
 
 static const std::string PLANNING_GROUP = "arm_with_torso";
 moveit::planning_interface::MoveGroup* move_group;
@@ -112,9 +113,9 @@ void addCollisionObjects()
 
 void updateControlSignal(const fetch_custom_msgs::CartesianControls::ConstPtr& msg)
 {
-	float x = msg->x_axis;
-	geometry_msgs::PoseStamped c_pose = move_group->getCurrentPose("wrist_roll_link");
-	ROS_INFO("[%s]", "here");
+	control_signals[0] = msg->x_axis;
+	control_signals[1] = msg->y_axis;
+	control_signals[2] = msg->z_axis;
 }
 
 int main(int argc, char **argv)
@@ -128,5 +129,45 @@ int main(int argc, char **argv)
 
 	addCollisionObjects();
 	ros::Subscriber sub = nh.subscribe("control_signal", 1, updateControlSignal);
-	ros::spinOnce();
+	ros::AsyncSpinner spinner(2);
+	spinner.start();
+
+	ros::Rate r(30); //30 hz
+	moveit::planning_interface::MoveGroup::Plan t_plan;
+	bool success = false;
+	move_group->setPlanningTime(0.05);
+	move_group->setMaxVelocityScalingFactor(0.5);
+	while(ros::ok())
+	{
+		if(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0){
+			;
+		} else 
+		{
+			if(success)
+			{
+				//move_group->stop();
+				move_group->asyncExecute(t_plan);
+
+			}
+			geometry_msgs::PoseStamped c_pose = move_group->getCurrentPose("wrist_roll_link");
+
+			geometry_msgs::Pose target_pose;
+
+			//copy over orientation
+			target_pose.orientation.w = c_pose.pose.orientation.w;
+			target_pose.orientation.x = c_pose.pose.orientation.x;
+			target_pose.orientation.y = c_pose.pose.orientation.y;
+			target_pose.orientation.z = c_pose.pose.orientation.z;
+
+			//update position according to control input
+			target_pose.position.x = c_pose.pose.position.x + control_signals[0]*update_gains[0];
+			target_pose.position.y = c_pose.pose.position.y + control_signals[1]*update_gains[1];
+			target_pose.position.z = c_pose.pose.position.z + control_signals[2]*update_gains[2];
+			
+			move_group->setPoseTarget(target_pose, "wrist_roll_link");
+			success = move_group->plan(t_plan);
+		}
+		r.sleep();
+		//ros::spinOnce();
+	}
 }
