@@ -213,11 +213,12 @@ int main(int argc, char **argv)
 	ros::AsyncSpinner spinner(3);
 	spinner.start();
 
-	ros::Rate r(30); //30 hz
-	//moveit::planning_interface::MoveGroup::Plan t_plan;
+	ros::Rate r(30); //update check for new controls at 30 hz
 	geometry_msgs::Pose t_pose;
 	bool success = false;
 	move_group->setPlanningTime(0.05);
+	move_group->setNumPlanningAttempts(10)
+	//TODO: look at different planners, maybe set a specific one to be used
 	move_group->setMaxVelocityScalingFactor(0.01);
 	std_msgs::String msg;
 	geometry_msgs::PoseStamped c_pose;
@@ -245,29 +246,29 @@ int main(int argc, char **argv)
 
 				    // compute cartesian path
 				    t = clock();
-				    double ret = move_group->computeCartesianPath(waypoints, 0.2, 10000, srv.request.trajectory, false);
-				    rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
-				    time_planner.computeTimeStamps(rt_planner, 0.2, 1.0);
-				    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
+				    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, true);
 				    t = clock() - t;
 					sprintf(buffer, "Computing path took: %f seconds.\n",((float)t)/CLOCKS_PER_SEC);
 					msg.data = buffer;
 					chatter_pub.publish(msg);
-				    if(ret < 0){
+				    if(ret <= 0.0){
 				        // no path could be computed
 				        ROS_ERROR("Unable to compute Cartesian path!");
 				        sprintf(buffer, "%s", "No path found!\n");
 				        msg.data = buffer;
 				        chatter_pub.publish(msg);
 				    }
+				    else
+				    {
+				    	rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
+					    time_planner.computeTimeStamps(rt_planner, 0.2, 1.0);
+					    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
 
-				    // send trajectory to arm controller
-				    srv.request.wait_for_execution = false;
-				    executeKnownTrajectoryServiceClient.call(srv);
-				    trajectory_active = true;
-
-				    //original
-					//move_group->asyncExecute(t_plan);
+					    // send trajectory to arm controller
+					    srv.request.wait_for_execution = false;
+					    executeKnownTrajectoryServiceClient.call(srv);
+					    trajectory_active = true;
+				    }
 				}
 			}
 			controls_updated = false;
