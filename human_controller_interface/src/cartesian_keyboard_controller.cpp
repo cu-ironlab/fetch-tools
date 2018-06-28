@@ -5,6 +5,7 @@
 
 #include <moveit/move_group_interface/move_group.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/trajectory_processing/iterative_time_parameterization.h>
 
 #include <moveit_msgs/DisplayRobotState.h>
 #include <moveit_msgs/DisplayTrajectory.h>
@@ -13,6 +14,7 @@
 #include <moveit_msgs/CollisionObject.h>
 #include <moveit_msgs/ExecuteKnownTrajectory.h>
 #include <std_msgs/String.h>
+#include <control_msgs/FollowJointTrajectoryActionResult.h>
 
 #include <time.h>
 #include <stdio.h>
@@ -20,6 +22,7 @@
 float update_rate = 15.0;
 float control_signals [3] = {0.0, 0.0, 0.0};
 bool controls_updated = false;
+bool trajectory_active = false;
 
 static const std::string PLANNING_GROUP = "arm_with_torso";
 moveit::planning_interface::MoveGroup* move_group;
@@ -127,6 +130,13 @@ void updateControlSignal(const fetch_custom_msgs::CartesianControls::ConstPtr& m
 	}
 }
 
+void updateTrajectoryStatus(const control_msgs::FollowJointTrajectoryActionResult::ConstPtr& msg)
+{
+	//msg received means trajectory is complete
+	//can dig into message to find result if needed later
+	trajectory_active = false;
+}
+
 bool findPlan(geometry_msgs::PoseStamped c_pose, float x_in, float y_in, float z_in, geometry_msgs::Pose* target_pose)
 {
 	bool success;
@@ -139,7 +149,7 @@ bool findPlan(geometry_msgs::PoseStamped c_pose, float x_in, float y_in, float z
 	target_pose->orientation.z = c_pose.pose.orientation.z;
 
 	int iter_c = 0;
-	float high = 1.0;
+	float high = 0.5;
 	float low = 0.0;
 	float g;
 	float s_gain = -1.0;
@@ -194,10 +204,13 @@ int main(int argc, char **argv)
 	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
 	planning_scene_interface = new moveit::planning_interface::PlanningSceneInterface();
 	joint_model_group = move_group->getCurrentState()->getJointModelGroup(PLANNING_GROUP);
+	robot_trajectory::RobotTrajectory rt_planner(move_group->getRobotModel(), PLANNING_GROUP);
+	trajectory_processing::IterativeParabolicTimeParameterization time_planner;
 
 	addCollisionObjects();
-	ros::Subscriber sub = nh.subscribe("control_signal", 1, updateControlSignal);
-	ros::AsyncSpinner spinner(2);
+	ros::Subscriber control_sub = nh.subscribe("control_signal", 1, updateControlSignal);
+	ros::Subscriber status_sub = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/result", 1, updateTrajectoryStatus);
+	ros::AsyncSpinner spinner(3);
 	spinner.start();
 
 	ros::Rate r(30); //30 hz
@@ -205,8 +218,9 @@ int main(int argc, char **argv)
 	geometry_msgs::Pose t_pose;
 	bool success = false;
 	move_group->setPlanningTime(0.05);
-	move_group->setMaxVelocityScalingFactor(0.5);
+	move_group->setMaxVelocityScalingFactor(0.01);
 	std_msgs::String msg;
+	geometry_msgs::PoseStamped c_pose;
 	while(ros::ok())
 	{
 		if(controls_updated)
@@ -214,7 +228,7 @@ int main(int argc, char **argv)
 			move_group->stop();
 			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
-				geometry_msgs::PoseStamped c_pose = move_group->getCurrentPose("wrist_roll_link");
+				c_pose = move_group->getCurrentPose("wrist_roll_link");
 				clock_t t = clock();
 				success = findPlan(c_pose, control_signals[0], control_signals[1], control_signals[2], &t_pose);
 				t = clock() - t;
@@ -231,7 +245,10 @@ int main(int argc, char **argv)
 
 				    // compute cartesian path
 				    t = clock();
-				    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, false);
+				    double ret = move_group->computeCartesianPath(waypoints, 0.2, 10000, srv.request.trajectory, false);
+				    rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
+				    time_planner.computeTimeStamps(rt_planner, 0.2, 1.0);
+				    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
 				    t = clock() - t;
 					sprintf(buffer, "Computing path took: %f seconds.\n",((float)t)/CLOCKS_PER_SEC);
 					msg.data = buffer;
@@ -239,17 +256,35 @@ int main(int argc, char **argv)
 				    if(ret < 0){
 				        // no path could be computed
 				        ROS_ERROR("Unable to compute Cartesian path!");
+				        sprintf(buffer, "%s", "No path found!\n");
+				        msg.data = buffer;
+				        chatter_pub.publish(msg);
 				    }
 
 				    // send trajectory to arm controller
 				    srv.request.wait_for_execution = false;
 				    executeKnownTrajectoryServiceClient.call(srv);
+				    trajectory_active = true;
 
 				    //original
 					//move_group->asyncExecute(t_plan);
 				}
 			}
 			controls_updated = false;
+		}
+		else
+		{
+			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
+			{
+				if(!trajectory_active)
+				{
+					//refresh planning
+					controls_updated = true;
+					sprintf(buffer, "%s", "Refreshing planning...\n");
+			        msg.data = buffer;
+			        chatter_pub.publish(msg);
+				}
+			}
 		}
 		r.sleep();
 		//ros::spinOnce();
