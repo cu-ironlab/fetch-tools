@@ -11,10 +11,15 @@
 
 #include <moveit_msgs/AttachedCollisionObject.h>
 #include <moveit_msgs/CollisionObject.h>
+#include <moveit_msgs/ExecuteKnownTrajectory.h>
+#include <std_msgs/String.h>
+
+#include <time.h>
+#include <stdio.h>
 
 float update_rate = 15.0;
-float update_gains [3] = {0.05, 0.05, 0.05};
 float control_signals [3] = {0.0, 0.0, 0.0};
+bool controls_updated = false;
 
 static const std::string PLANNING_GROUP = "arm_with_torso";
 moveit::planning_interface::MoveGroup* move_group;
@@ -113,15 +118,78 @@ void addCollisionObjects()
 
 void updateControlSignal(const fetch_custom_msgs::CartesianControls::ConstPtr& msg)
 {
-	control_signals[0] = msg->x_axis;
-	control_signals[1] = msg->y_axis;
-	control_signals[2] = msg->z_axis;
+	if(control_signals[0] != msg->x_axis || control_signals[1] != msg->y_axis || control_signals[2] != msg->z_axis)
+	{
+		control_signals[0] = msg->x_axis;
+		control_signals[1] = msg->y_axis;
+		control_signals[2] = msg->z_axis;
+		controls_updated = true;
+	}
+}
+
+bool findPlan(geometry_msgs::PoseStamped c_pose, float x_in, float y_in, float z_in, geometry_msgs::Pose* target_pose)
+{
+	bool success;
+	moveit::planning_interface::MoveGroup::Plan t_plan;
+
+	//copy over orientation
+	target_pose->orientation.w = c_pose.pose.orientation.w;
+	target_pose->orientation.x = c_pose.pose.orientation.x;
+	target_pose->orientation.y = c_pose.pose.orientation.y;
+	target_pose->orientation.z = c_pose.pose.orientation.z;
+
+	int iter_c = 0;
+	float high = 1.0;
+	float low = 0.0;
+	float g;
+	float s_gain = -1.0;
+	while(++iter_c < 7 && !(low > high))
+	{
+		g = (high + low)/2.0;
+		
+		//update position according to control input * current gain
+		target_pose->position.x = c_pose.pose.position.x + x_in*g;
+		target_pose->position.y = c_pose.pose.position.y + y_in*g;
+		target_pose->position.z = c_pose.pose.position.z + z_in*g;
+		move_group->setPoseTarget(*target_pose, "wrist_roll_link");
+		success = move_group->plan(t_plan);
+		if(success)
+		{
+			if(g > s_gain)
+			{
+				s_gain = g;
+			}
+			low = g + 0.01;
+		}
+		else
+		{
+			high = g - 0.01;
+		}
+	}
+	if(s_gain == -1.0)
+	{
+		return false;
+	}
+	else
+	{
+		//update position according to control input * best success gain
+		target_pose->position.x = c_pose.pose.position.x + control_signals[0]*s_gain;
+		target_pose->position.y = c_pose.pose.position.y + control_signals[1]*s_gain;
+		target_pose->position.z = c_pose.pose.position.z + control_signals[2]*s_gain;
+		move_group->setStartStateToCurrentState();
+		move_group->setPoseTarget(*target_pose, "wrist_roll_link");
+		//success = move_group->plan(*t_plan);
+		return true;
+	}
 }
 
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "cartesian_keyboard_controller");
 	ros::NodeHandle nh;
+	ros::ServiceClient executeKnownTrajectoryServiceClient = nh.serviceClient<moveit_msgs::ExecuteKnownTrajectory>("/execute_kinematic_path");
+	ros::Publisher chatter_pub = nh.advertise<std_msgs::String>("controller_debug", 1000);
+	char buffer [60];
 
 	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
 	planning_scene_interface = new moveit::planning_interface::PlanningSceneInterface();
@@ -133,41 +201,58 @@ int main(int argc, char **argv)
 	spinner.start();
 
 	ros::Rate r(30); //30 hz
-	moveit::planning_interface::MoveGroup::Plan t_plan;
+	//moveit::planning_interface::MoveGroup::Plan t_plan;
+	geometry_msgs::Pose t_pose;
 	bool success = false;
 	move_group->setPlanningTime(0.05);
 	move_group->setMaxVelocityScalingFactor(0.5);
+	std_msgs::String msg;
 	while(ros::ok())
 	{
-		if(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0){
-			;
-		} else 
+		if(controls_updated)
 		{
-			if(success)
+			move_group->stop();
+			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
-				//move_group->stop();
-				move_group->asyncExecute(t_plan);
+				geometry_msgs::PoseStamped c_pose = move_group->getCurrentPose("wrist_roll_link");
+				clock_t t = clock();
+				success = findPlan(c_pose, control_signals[0], control_signals[1], control_signals[2], &t_pose);
+				t = clock() - t;
+				sprintf(buffer, "Planning took: %f seconds.\n",((float)t)/CLOCKS_PER_SEC);
+				msg.data = buffer;
+				chatter_pub.publish(msg);
+				if(success)
+				{
+					 // set waypoints for which to compute path
+				    std::vector<geometry_msgs::Pose> waypoints;
+				    waypoints.push_back(c_pose.pose);
+				    waypoints.push_back(t_pose);
+				    moveit_msgs::ExecuteKnownTrajectory srv;
 
+				    // compute cartesian path
+				    t = clock();
+				    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, false);
+				    t = clock() - t;
+					sprintf(buffer, "Computing path took: %f seconds.\n",((float)t)/CLOCKS_PER_SEC);
+					msg.data = buffer;
+					chatter_pub.publish(msg);
+				    if(ret < 0){
+				        // no path could be computed
+				        ROS_ERROR("Unable to compute Cartesian path!");
+				    }
+
+				    // send trajectory to arm controller
+				    srv.request.wait_for_execution = false;
+				    executeKnownTrajectoryServiceClient.call(srv);
+
+				    //original
+					//move_group->asyncExecute(t_plan);
+				}
 			}
-			geometry_msgs::PoseStamped c_pose = move_group->getCurrentPose("wrist_roll_link");
-
-			geometry_msgs::Pose target_pose;
-
-			//copy over orientation
-			target_pose.orientation.w = c_pose.pose.orientation.w;
-			target_pose.orientation.x = c_pose.pose.orientation.x;
-			target_pose.orientation.y = c_pose.pose.orientation.y;
-			target_pose.orientation.z = c_pose.pose.orientation.z;
-
-			//update position according to control input
-			target_pose.position.x = c_pose.pose.position.x + control_signals[0]*update_gains[0];
-			target_pose.position.y = c_pose.pose.position.y + control_signals[1]*update_gains[1];
-			target_pose.position.z = c_pose.pose.position.z + control_signals[2]*update_gains[2];
-			
-			move_group->setPoseTarget(target_pose, "wrist_roll_link");
-			success = move_group->plan(t_plan);
+			controls_updated = false;
 		}
 		r.sleep();
 		//ros::spinOnce();
 	}
+	move_group->stop();
 }
