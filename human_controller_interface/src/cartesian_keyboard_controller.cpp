@@ -19,7 +19,6 @@
 #include <time.h>
 #include <stdio.h>
 
-float update_rate = 15.0;
 float control_signals [3] = {0.0, 0.0, 0.0};
 bool controls_updated = false;
 bool trajectory_active = false;
@@ -31,6 +30,9 @@ const robot_state::JointModelGroup* joint_model_group;
 
 void addCollisionObjects()
 {
+	//TODO: load in objects from an XML file
+
+	
 	std::vector<moveit_msgs::CollisionObject> collision_objects;
 	//front ground
 	moveit_msgs::CollisionObject c_o1;
@@ -137,60 +139,17 @@ void updateTrajectoryStatus(const control_msgs::FollowJointTrajectoryActionResul
 	trajectory_active = false;
 }
 
-bool findPlan(geometry_msgs::PoseStamped c_pose, float x_in, float y_in, float z_in, geometry_msgs::Pose* target_pose)
+void getTarget(geometry_msgs::Pose* current_pose, geometry_msgs::Pose* target_pose)
 {
-	bool success;
-	moveit::planning_interface::MoveGroup::Plan t_plan;
-
-	//copy over orientation
-	target_pose->orientation.w = c_pose.pose.orientation.w;
-	target_pose->orientation.x = c_pose.pose.orientation.x;
-	target_pose->orientation.y = c_pose.pose.orientation.y;
-	target_pose->orientation.z = c_pose.pose.orientation.z;
-
-	int iter_c = 0;
-	float high = 0.5;
-	float low = 0.0;
-	float g;
-	float s_gain = -1.0;
-	while(++iter_c < 7 && !(low > high))
-	{
-		g = (high + low)/2.0;
-		
-		//update position according to control input * current gain
-		target_pose->position.x = c_pose.pose.position.x + x_in*g;
-		target_pose->position.y = c_pose.pose.position.y + y_in*g;
-		target_pose->position.z = c_pose.pose.position.z + z_in*g;
-		move_group->setPoseTarget(*target_pose, "wrist_roll_link");
-		success = move_group->plan(t_plan);
-		if(success)
-		{
-			if(g > s_gain)
-			{
-				s_gain = g;
-			}
-			low = g + 0.01;
-		}
-		else
-		{
-			high = g - 0.01;
-		}
-	}
-	if(s_gain == -1.0)
-	{
-		return false;
-	}
-	else
-	{
-		//update position according to control input * best success gain
-		target_pose->position.x = c_pose.pose.position.x + control_signals[0]*s_gain;
-		target_pose->position.y = c_pose.pose.position.y + control_signals[1]*s_gain;
-		target_pose->position.z = c_pose.pose.position.z + control_signals[2]*s_gain;
-		move_group->setStartStateToCurrentState();
-		move_group->setPoseTarget(*target_pose, "wrist_roll_link");
-		//success = move_group->plan(*t_plan);
-		return true;
-	}
+	//copy orientation
+	target_pose->orientation.w = current_pose->orientation.w;
+	target_pose->orientation.x = current_pose->orientation.x;
+	target_pose->orientation.y = current_pose->orientation.y;
+	target_pose->orientation.z = current_pose->orientation.z;
+	//update goal to distant point along ray of control direction
+	target_pose->position.x = current_pose->position.x + control_signals[0]*2.0;
+	target_pose->position.y = current_pose->position.y + control_signals[1]*2.0;
+	target_pose->position.z = current_pose->position.z + control_signals[2]*2.0;
 }
 
 int main(int argc, char **argv)
@@ -215,11 +174,6 @@ int main(int argc, char **argv)
 
 	ros::Rate r(30); //update check for new controls at 30 hz
 	geometry_msgs::Pose t_pose;
-	bool success = false;
-	move_group->setPlanningTime(0.05);
-	move_group->setNumPlanningAttempts(10)
-	//TODO: look at different planners, maybe set a specific one to be used
-	move_group->setMaxVelocityScalingFactor(0.01);
 	std_msgs::String msg;
 	geometry_msgs::PoseStamped c_pose;
 	while(ros::ok())
@@ -229,47 +183,41 @@ int main(int argc, char **argv)
 			move_group->stop();
 			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
+				//set target based on current pose and control inputs
 				c_pose = move_group->getCurrentPose("wrist_roll_link");
-				clock_t t = clock();
-				success = findPlan(c_pose, control_signals[0], control_signals[1], control_signals[2], &t_pose);
-				t = clock() - t;
-				sprintf(buffer, "Planning took: %f seconds.\n",((float)t)/CLOCKS_PER_SEC);
-				msg.data = buffer;
-				chatter_pub.publish(msg);
-				if(success)
-				{
-					 // set waypoints for which to compute path
-				    std::vector<geometry_msgs::Pose> waypoints;
-				    waypoints.push_back(c_pose.pose);
-				    waypoints.push_back(t_pose);
-				    moveit_msgs::ExecuteKnownTrajectory srv;
+				getTarget(&(c_pose.pose), &t_pose);
+				
+				 // set waypoints for which to compute path
+			    std::vector<geometry_msgs::Pose> waypoints;
+			    waypoints.push_back(c_pose.pose);
+			    waypoints.push_back(t_pose);
+			    moveit_msgs::ExecuteKnownTrajectory srv;
 
-				    // compute cartesian path
-				    t = clock();
-				    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, true);
-				    t = clock() - t;
-					sprintf(buffer, "Computing path took: %f seconds.\n",((float)t)/CLOCKS_PER_SEC);
-					msg.data = buffer;
-					chatter_pub.publish(msg);
-				    if(ret <= 0.0){
-				        // no path could be computed
-				        ROS_ERROR("Unable to compute Cartesian path!");
-				        sprintf(buffer, "%s", "No path found!\n");
-				        msg.data = buffer;
-				        chatter_pub.publish(msg);
-				    }
-				    else
-				    {
-				    	rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
-					    time_planner.computeTimeStamps(rt_planner, 0.2, 1.0);
-					    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
+			    // compute cartesian path
+			    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, true); //the two magic numbers here are allowed distance between points (meters) and configuration space jump distance (units?)
 
-					    // send trajectory to arm controller
-					    srv.request.wait_for_execution = false;
-					    executeKnownTrajectoryServiceClient.call(srv);
-					    trajectory_active = true;
-				    }
-				}
+				sprintf(buffer, "Plan found: %f", ret);
+		        msg.data = buffer;
+		        chatter_pub.publish(msg);
+			    if(ret <= 0.0){
+			        // no path could be computed or all paths caused collisions
+			        ROS_ERROR("Unable to compute Cartesian path!");
+			        sprintf(buffer, "%s", "No path found!\n");
+			        msg.data = buffer;
+			        chatter_pub.publish(msg);
+			    }
+			    else
+			    {
+			    	//add time stamps to trajectory to control velocity
+			    	rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
+				    time_planner.computeTimeStamps(rt_planner, 0.1, 0.5);
+				    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
+
+				    // send trajectory to arm controller
+				    srv.request.wait_for_execution = false;
+				    executeKnownTrajectoryServiceClient.call(srv);
+				    trajectory_active = true;
+			    }
 			}
 			controls_updated = false;
 		}
@@ -277,18 +225,18 @@ int main(int argc, char **argv)
 		{
 			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
+				//if controls are being held down but no movement is active, try replanning
 				if(!trajectory_active)
 				{
 					//refresh planning
 					controls_updated = true;
-					sprintf(buffer, "%s", "Refreshing planning...\n");
-			        msg.data = buffer;
-			        chatter_pub.publish(msg);
 				}
+
+				//TODO: sometimes errors are caused by the start state of a trajectory shifting slightly. This bug is somewhat rare, but it cannot be detected in the current program state
+				//--need to find someway to detect these errors and consequently replan
 			}
 		}
 		r.sleep();
-		//ros::spinOnce();
 	}
 	move_group->stop();
 }
