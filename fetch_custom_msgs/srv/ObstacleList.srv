@@ -1,0 +1,5 @@
+string request_string
+---
+uint16 num_obstacles
+string[] obstacle_names
+float64[] obstacle_coordinates

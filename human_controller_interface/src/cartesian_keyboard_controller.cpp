@@ -2,6 +2,7 @@
 #include "geometry_msgs/PoseStamped.h"
 
 #include <fetch_custom_msgs/CartesianControls.h>
+#include <fetch_custom_msgs/ObstacleList.h>
 
 #include <moveit/move_group_interface/move_group.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
@@ -28,95 +29,42 @@ moveit::planning_interface::MoveGroup* move_group;
 moveit::planning_interface::PlanningSceneInterface* planning_scene_interface;
 const robot_state::JointModelGroup* joint_model_group;
 
-void addCollisionObjects()
+void addCollisionObjects(ros::ServiceClient sc)
 {
-	//TODO: load in objects from an XML file
+	fetch_custom_msgs::ObstacleList srv;
+	ros::service::waitForService("/get_obstacle_objects", -1);
+	srv.request.request_string = "ObstacleList";
+	if(!sc.call(srv))
+	{
+		//Error in service call
+		return;
+	}
 
-	
 	std::vector<moveit_msgs::CollisionObject> collision_objects;
-	//front ground
-	moveit_msgs::CollisionObject c_o1;
-	c_o1.header.frame_id = move_group->getPlanningFrame();
-	c_o1.id = "front_ground";
-	shape_msgs::SolidPrimitive primitive1;
-	primitive1.type = primitive1.BOX;
-	primitive1.dimensions.resize(3);
-	primitive1.dimensions[0] = 2;
-	primitive1.dimensions[1] = 2;
-	primitive1.dimensions[2] = 2;
-	geometry_msgs::Pose box_pose1;
-	box_pose1.orientation.w = 1.0;
-	box_pose1.position.x =  1.1;
-	box_pose1.position.y = 0.0;
-	box_pose1.position.z =  -1.0;
-	c_o1.primitives.push_back(primitive1);
-	c_o1.primitive_poses.push_back(box_pose1);
-	c_o1.operation = c_o1.ADD;
+	int num_obstacles = srv.response.num_obstacles;
+	int i = 0;
+	for(i = 0; i < num_obstacles; ++i)
+	{
+		moveit_msgs::CollisionObject c;
+		c.header.frame_id = move_group->getPlanningFrame();
+		c.id = srv.response.obstacle_names[i];
+		shape_msgs::SolidPrimitive primitive;
+		primitive.type = primitive.BOX;
+		primitive.dimensions.resize(3);
+		primitive.dimensions[0] = srv.response.obstacle_coordinates[i*7 + 0];
+		primitive.dimensions[1] = srv.response.obstacle_coordinates[i*7 + 1];
+		primitive.dimensions[2] = srv.response.obstacle_coordinates[i*7 + 2];
+		geometry_msgs::Pose box_pose;
+		box_pose.orientation.w = srv.response.obstacle_coordinates[i*7 + 3];
+		box_pose.position.x =  srv.response.obstacle_coordinates[i*7 + 4];
+		box_pose.position.y = srv.response.obstacle_coordinates[i*7 + 5];
+		box_pose.position.z =  srv.response.obstacle_coordinates[i*7 + 6];
+		c.primitives.push_back(primitive);
+		c.primitive_poses.push_back(box_pose);
+		c.operation = c.ADD;
 
-	collision_objects.push_back(c_o1);
-
-	//back ground
-	moveit_msgs::CollisionObject c_o2;
-	c_o2.header.frame_id = move_group->getPlanningFrame();
-	c_o2.id = "back_ground";
-	shape_msgs::SolidPrimitive primitive2;
-	primitive2.type = primitive2.BOX;
-	primitive2.dimensions.resize(3);
-	primitive2.dimensions[0] = 2;
-	primitive2.dimensions[1] = 2;
-	primitive2.dimensions[2] = 2;
-	geometry_msgs::Pose box_pose2;
-	box_pose2.orientation.w = 1.0;
-	box_pose2.position.x =  -1.2;
-	box_pose2.position.y = 0.0;
-	box_pose2.position.z =  -1.0;
-	c_o2.primitives.push_back(primitive2);
-	c_o2.primitive_poses.push_back(box_pose2);
-	c_o2.operation = c_o2.ADD;
-
-	collision_objects.push_back(c_o2);
-
-	//left ground
-	moveit_msgs::CollisionObject c_o3;
-	c_o3.header.frame_id = move_group->getPlanningFrame();
-	c_o3.id = "left_ground";
-	shape_msgs::SolidPrimitive primitive3;
-	primitive3.type = primitive3.BOX;
-	primitive3.dimensions.resize(3);
-	primitive3.dimensions[0] = 2;
-	primitive3.dimensions[1] = 2;
-	primitive3.dimensions[2] = 2;
-	geometry_msgs::Pose box_pose3;
-	box_pose3.orientation.w = 1.0;
-	box_pose3.position.x =  0.0;
-	box_pose3.position.y = 1.2;
-	box_pose3.position.z =  -1.0;
-	c_o3.primitives.push_back(primitive3);
-	c_o3.primitive_poses.push_back(box_pose3);
-	c_o3.operation = c_o3.ADD;
-
-	collision_objects.push_back(c_o3);
-
-	//right_ground
-	moveit_msgs::CollisionObject c_o4;
-	c_o4.header.frame_id = move_group->getPlanningFrame();
-	c_o4.id = "front_ground";
-	shape_msgs::SolidPrimitive primitive4;
-	primitive4.type = primitive4.BOX;
-	primitive4.dimensions.resize(3);
-	primitive4.dimensions[0] = 2;
-	primitive4.dimensions[1] = 2;
-	primitive4.dimensions[2] = 2;
-	geometry_msgs::Pose box_pose4;
-	box_pose4.orientation.w = 1.0;
-	box_pose4.position.x =  0.0;
-	box_pose4.position.y = -1.2;
-	box_pose4.position.z =  -1.0;
-	c_o4.primitives.push_back(primitive4);
-	c_o4.primitive_poses.push_back(box_pose4);
-	c_o4.operation = c_o4.ADD;
-
-	collision_objects.push_back(c_o4);
+		collision_objects.push_back(c);
+	}
 	
 	planning_scene_interface->addCollisionObjects(collision_objects);
 }
@@ -166,7 +114,8 @@ int main(int argc, char **argv)
 	robot_trajectory::RobotTrajectory rt_planner(move_group->getRobotModel(), PLANNING_GROUP);
 	trajectory_processing::IterativeParabolicTimeParameterization time_planner;
 
-	addCollisionObjects();
+	ros::ServiceClient getObstacleObjectsServiceClient = nh.serviceClient<fetch_custom_msgs::ObstacleList>("/get_obstacle_objects");
+	addCollisionObjects(getObstacleObjectsServiceClient);
 	ros::Subscriber control_sub = nh.subscribe("control_signal", 1, updateControlSignal);
 	ros::Subscriber status_sub = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/result", 1, updateTrajectoryStatus);
 	ros::AsyncSpinner spinner(3);
