@@ -14,11 +14,14 @@
 #include <moveit_msgs/AttachedCollisionObject.h>
 #include <moveit_msgs/CollisionObject.h>
 #include <moveit_msgs/ExecuteKnownTrajectory.h>
+#include <moveit_msgs/RobotTrajectory.h>
+#include <trajectory_msgs/JointTrajectoryPoint.h>
 #include <std_msgs/String.h>
 #include <control_msgs/FollowJointTrajectoryActionResult.h>
 
 #include <time.h>
 #include <stdio.h>
+#include <cmath>
 
 float control_signals [3] = {0.0, 0.0, 0.0};
 bool controls_updated = false;
@@ -100,13 +103,40 @@ void getTarget(geometry_msgs::Pose* current_pose, geometry_msgs::Pose* target_po
 	target_pose->position.z = current_pose->position.z + control_signals[2]*2.0;
 }
 
+void screenTrajectory(moveit_msgs::RobotTrajectory* orig_traj)
+{
+	//tune this to prevent major configuration space changes (which sometimes don't properly screen collisions)
+	float distance_cutoff = 3.0;
+	std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator first = orig_traj->joint_trajectory.points.begin() + 0;
+	std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator last = orig_traj->joint_trajectory.points.begin() + orig_traj->joint_trajectory.points.size();
+	int i;
+	for(i = 0; i < orig_traj->joint_trajectory.points.size() - 1; ++i)
+	{
+		float dist_sq = 0.0;
+		int j;
+		for(j = 0; j < orig_traj->joint_trajectory.points[i].positions.size(); ++j)
+		{
+			float dist_ = orig_traj->joint_trajectory.points[i+1].positions[j] - orig_traj->joint_trajectory.points[i].positions[j];
+			dist_sq += dist_*dist_;
+		}
+		if(dist_sq > distance_cutoff)
+		{
+			int size_diff = orig_traj->joint_trajectory.points.size() - (i+1);
+			ROS_ERROR("Clipping [%d] points out of trajectory", size_diff);
+			last = orig_traj->joint_trajectory.points.begin() + (i+1);
+			break;
+		}
+	}
+	std::vector<trajectory_msgs::JointTrajectoryPoint> new_points(first, last);
+	orig_traj->joint_trajectory.points = new_points;
+}
+
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "cartesian_keyboard_controller");
 	ros::NodeHandle nh;
 	ros::ServiceClient executeKnownTrajectoryServiceClient = nh.serviceClient<moveit_msgs::ExecuteKnownTrajectory>("/execute_kinematic_path");
-	ros::Publisher chatter_pub = nh.advertise<std_msgs::String>("controller_debug", 1000);
-	char buffer [60];
+	ros::Publisher chatter_pub = nh.advertise<moveit_msgs::RobotTrajectory>("controller_debug", 1000);
 
 	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
 	planning_scene_interface = new moveit::planning_interface::PlanningSceneInterface();
@@ -138,30 +168,26 @@ int main(int argc, char **argv)
 				
 				 // set waypoints for which to compute path
 			    std::vector<geometry_msgs::Pose> waypoints;
-			    waypoints.push_back(c_pose.pose);
 			    waypoints.push_back(t_pose);
 			    moveit_msgs::ExecuteKnownTrajectory srv;
 
 			    // compute cartesian path
 			    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, true); //the two magic numbers here are allowed distance between points (meters) and configuration space jump distance (units?)
 
-				sprintf(buffer, "Plan found: %f", ret);
-		        msg.data = buffer;
-		        chatter_pub.publish(msg);
 			    if(ret <= 0.0){
 			        // no path could be computed or all paths caused collisions
 			        ROS_ERROR("Unable to compute Cartesian path!");
-			        sprintf(buffer, "%s", "No path found!\n");
-			        msg.data = buffer;
-			        chatter_pub.publish(msg);
 			    }
 			    else
 			    {
+			    	chatter_pub.publish(srv.request.trajectory);
 			    	//add time stamps to trajectory to control velocity
 			    	rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
 				    time_planner.computeTimeStamps(rt_planner, 0.1, 0.5);
 				    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
+				    chatter_pub.publish(srv.request.trajectory);
 
+				    screenTrajectory(&srv.request.trajectory);
 				    // send trajectory to arm controller
 				    srv.request.wait_for_execution = false;
 				    executeKnownTrajectoryServiceClient.call(srv);
