@@ -17,15 +17,20 @@
 #include <moveit_msgs/RobotTrajectory.h>
 #include <trajectory_msgs/JointTrajectoryPoint.h>
 #include <std_msgs/String.h>
+#include <control_msgs/FollowJointTrajectoryActionGoal.h>
 #include <control_msgs/FollowJointTrajectoryActionResult.h>
 
 #include <time.h>
 #include <stdio.h>
 #include <cmath>
 
+const int TRAJECTORY_INACTIVE = 0;
+const int TRAJECTORY_PENDING = 1;
+const int TRAJECTORY_ACTIVE = 2;
+
 float control_signals [3] = {0.0, 0.0, 0.0};
 bool controls_updated = false;
-bool trajectory_active = false;
+int trajectory_status = 0;
 
 static const std::string PLANNING_GROUP = "arm_with_torso";
 moveit::planning_interface::MoveGroup* move_group;
@@ -83,11 +88,16 @@ void updateControlSignal(const fetch_custom_msgs::CartesianControls::ConstPtr& m
 	}
 }
 
+void updateTrajectoryGoal(const control_msgs::FollowJointTrajectoryActionGoal::ConstPtr& msg)
+{
+	trajectory_status = TRAJECTORY_ACTIVE;
+}
+
 void updateTrajectoryStatus(const control_msgs::FollowJointTrajectoryActionResult::ConstPtr& msg)
 {
 	//msg received means trajectory is complete
 	//can dig into message to find result if needed later
-	trajectory_active = false;
+	trajectory_status = TRAJECTORY_INACTIVE;
 }
 
 void getTarget(geometry_msgs::Pose* current_pose, geometry_msgs::Pose* target_pose)
@@ -147,6 +157,7 @@ int main(int argc, char **argv)
 	ros::ServiceClient getObstacleObjectsServiceClient = nh.serviceClient<fetch_custom_msgs::ObstacleList>("/get_obstacle_objects");
 	addCollisionObjects(getObstacleObjectsServiceClient);
 	ros::Subscriber control_sub = nh.subscribe("control_signal", 1, updateControlSignal);
+	ros::Subscriber traj_received = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/goal", 1, updateTrajectoryGoal);
 	ros::Subscriber status_sub = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/result", 1, updateTrajectoryStatus);
 	ros::AsyncSpinner spinner(3);
 	spinner.start();
@@ -176,14 +187,15 @@ int main(int argc, char **argv)
 
 			    if(ret <= 0.0){
 			        // no path could be computed or all paths caused collisions
-			        ROS_ERROR("Unable to compute Cartesian path!");
+			        //ROS_ERROR("Unable to compute Cartesian path!");
+			    	;
 			    }
 			    else
 			    {
 			    	chatter_pub.publish(srv.request.trajectory);
 			    	//add time stamps to trajectory to control velocity
 			    	rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
-				    time_planner.computeTimeStamps(rt_planner, 0.1, 0.5);
+				    time_planner.computeTimeStamps(rt_planner, 0.25, 0.5);
 				    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
 				    chatter_pub.publish(srv.request.trajectory);
 
@@ -191,7 +203,7 @@ int main(int argc, char **argv)
 				    // send trajectory to arm controller
 				    srv.request.wait_for_execution = false;
 				    executeKnownTrajectoryServiceClient.call(srv);
-				    trajectory_active = true;
+				    trajectory_status = TRAJECTORY_PENDING;
 			    }
 			}
 			controls_updated = false;
@@ -201,14 +213,20 @@ int main(int argc, char **argv)
 			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
 				//if controls are being held down but no movement is active, try replanning
-				if(!trajectory_active)
+				if(trajectory_status == TRAJECTORY_INACTIVE)
 				{
+					//TODO: maybe don't do this at quite as fast of a rate
 					//refresh planning
 					controls_updated = true;
 				}
-
-				//TODO: sometimes errors are caused by the start state of a trajectory shifting slightly. This bug is somewhat rare, but it cannot be detected in the current program state
-				//--need to find someway to detect these errors and consequently replan
+				else
+				{
+					if(trajectory_status == TRAJECTORY_PENDING)
+					{
+						//if trajectory was sent but not received, replan
+						controls_updated = true;
+					}
+				}
 			}
 		}
 		r.sleep();
