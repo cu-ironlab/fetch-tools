@@ -36,6 +36,7 @@ static const std::string PLANNING_GROUP = "arm_with_torso";
 moveit::planning_interface::MoveGroup* move_group;
 moveit::planning_interface::PlanningSceneInterface* planning_scene_interface;
 const robot_state::JointModelGroup* joint_model_group;
+geometry_msgs::Pose starting_pose;
 
 void addCollisionObjects(ros::ServiceClient sc)
 {
@@ -103,10 +104,10 @@ void updateTrajectoryStatus(const control_msgs::FollowJointTrajectoryActionResul
 void getTarget(geometry_msgs::Pose* current_pose, geometry_msgs::Pose* target_pose)
 {
 	//copy orientation
-	target_pose->orientation.w = current_pose->orientation.w;
-	target_pose->orientation.x = current_pose->orientation.x;
-	target_pose->orientation.y = current_pose->orientation.y;
-	target_pose->orientation.z = current_pose->orientation.z;
+	target_pose->orientation.w = starting_pose.orientation.w;
+	target_pose->orientation.x = starting_pose.orientation.x;
+	target_pose->orientation.y = starting_pose.orientation.y;
+	target_pose->orientation.z = starting_pose.orientation.z;
 	//update goal to distant point along ray of control direction
 	target_pose->position.x = current_pose->position.x + control_signals[0]*2.0;
 	target_pose->position.y = current_pose->position.y + control_signals[1]*2.0;
@@ -141,12 +142,35 @@ void screenTrajectory(moveit_msgs::RobotTrajectory* orig_traj)
 	orig_traj->joint_trajectory.points = new_points;
 }
 
+void moveToStartingPose()
+{
+	ROS_ERROR("here");
+	starting_pose.orientation.w = 1.0;
+	starting_pose.orientation.x = 0.0;
+	starting_pose.orientation.y = 0.0;
+	starting_pose.orientation.z = 0.0;
+
+	starting_pose.position.x = 0.4;
+	starting_pose.position.y = -0.1;
+	starting_pose.position.z = 1.1;
+
+	moveit::planning_interface::MoveGroup::Plan my_plan;
+	move_group->setPoseTarget(starting_pose);
+	move_group->setPlanningTime(5.0);
+	move_group->setMaxAccelerationScalingFactor(0.5);
+	move_group->setMaxVelocityScalingFactor(0.2);
+	ROS_ERROR("moving");
+	move_group->asyncMove();
+	ROS_ERROR("done");
+	sleep(5.0);
+}
+
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "cartesian_keyboard_controller");
 	ros::NodeHandle nh;
 	ros::ServiceClient executeKnownTrajectoryServiceClient = nh.serviceClient<moveit_msgs::ExecuteKnownTrajectory>("/execute_kinematic_path");
-	ros::Publisher chatter_pub = nh.advertise<moveit_msgs::RobotTrajectory>("controller_debug", 1000);
+	ros::Publisher chatter_pub = nh.advertise<geometry_msgs::PoseStamped>("controller_debug", 1000);
 
 	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
 	planning_scene_interface = new moveit::planning_interface::PlanningSceneInterface();
@@ -159,6 +183,7 @@ int main(int argc, char **argv)
 	ros::Subscriber control_sub = nh.subscribe("control_signal", 1, updateControlSignal);
 	ros::Subscriber traj_received = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/goal", 1, updateTrajectoryGoal);
 	ros::Subscriber status_sub = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/result", 1, updateTrajectoryStatus);
+	moveToStartingPose();
 	ros::AsyncSpinner spinner(3);
 	spinner.start();
 
@@ -175,6 +200,7 @@ int main(int argc, char **argv)
 			{
 				//set target based on current pose and control inputs
 				c_pose = move_group->getCurrentPose("wrist_roll_link");
+				chatter_pub.publish(c_pose);
 				getTarget(&(c_pose.pose), &t_pose);
 				
 				 // set waypoints for which to compute path
@@ -192,12 +218,10 @@ int main(int argc, char **argv)
 			    }
 			    else
 			    {
-			    	chatter_pub.publish(srv.request.trajectory);
 			    	//add time stamps to trajectory to control velocity
 			    	rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
-				    time_planner.computeTimeStamps(rt_planner, 0.25, 0.5);
+				    time_planner.computeTimeStamps(rt_planner, 0.1, 0.5);
 				    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
-				    chatter_pub.publish(srv.request.trajectory);
 
 				    screenTrajectory(&srv.request.trajectory);
 				    // send trajectory to arm controller
