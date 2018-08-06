@@ -31,6 +31,7 @@ const int TRAJECTORY_ACTIVE = 2;
 float control_signals [3] = {0.0, 0.0, 0.0};
 bool controls_updated = false;
 int trajectory_status = 0;
+int last_movement_axis = -1;
 
 static const std::string PLANNING_GROUP = "arm_with_torso";
 moveit::planning_interface::MoveGroup* move_group;
@@ -101,17 +102,41 @@ void updateTrajectoryStatus(const control_msgs::FollowJointTrajectoryActionResul
 	trajectory_status = TRAJECTORY_INACTIVE;
 }
 
-void getTarget(geometry_msgs::Pose* current_pose, geometry_msgs::Pose* target_pose)
+void getTarget(geometry_msgs::Pose* target_pose, geometry_msgs::Pose ideal_pose, geometry_msgs::Pose current_pose)
 {
-	//copy orientation
-	target_pose->orientation.w = starting_pose.orientation.w;
-	target_pose->orientation.x = starting_pose.orientation.x;
-	target_pose->orientation.y = starting_pose.orientation.y;
-	target_pose->orientation.z = starting_pose.orientation.z;
-	//update goal to distant point along ray of control direction
-	target_pose->position.x = current_pose->position.x + control_signals[0]*2.0;
-	target_pose->position.y = current_pose->position.y + control_signals[1]*2.0;
-	target_pose->position.z = current_pose->position.z + control_signals[2]*2.0;
+	target_pose->position.x = ideal_pose.position.x;
+	target_pose->position.y = ideal_pose.position.y;
+	target_pose->position.z = ideal_pose.position.z;
+	if(control_signals[0] != 0.0)
+	{
+		target_pose->position.x += control_signals[0]*0.5;
+		last_movement_axis = 0;
+	}
+	if(control_signals[1] != 0.0)
+	{
+		target_pose->position.y += control_signals[1]*0.5;
+		last_movement_axis = 1;
+	}
+	if(control_signals[2] != 0.0)
+	{
+		target_pose->position.z += control_signals[2]*0.5;
+		last_movement_axis = 2;
+	}
+}
+
+void updateIdealPose(geometry_msgs::Pose* ideal_pose, geometry_msgs::Pose current_pose)
+{
+	if(last_movement_axis == 0)
+	{
+		ideal_pose->position.x = current_pose.position.x;
+	} else if (last_movement_axis == 1)
+	{
+		ideal_pose->position.y = current_pose.position.y;
+	} else if (last_movement_axis == 2)
+	{
+		ideal_pose->position.z = current_pose.position.z;
+	}
+	last_movement_axis = -1;
 }
 
 void screenTrajectory(moveit_msgs::RobotTrajectory* orig_traj)
@@ -142,9 +167,17 @@ void screenTrajectory(moveit_msgs::RobotTrajectory* orig_traj)
 	orig_traj->joint_trajectory.points = new_points;
 }
 
+void waitForMotion()
+{
+	while(trajectory_status > 0)
+	{
+		sleep(0.5);
+	}
+	ROS_ERROR("Trajectory Complete");
+}
+
 void moveToStartingPose()
 {
-	ROS_ERROR("here");
 	starting_pose.orientation.w = 1.0;
 	starting_pose.orientation.x = 0.0;
 	starting_pose.orientation.y = 0.0;
@@ -159,10 +192,12 @@ void moveToStartingPose()
 	move_group->setPlanningTime(5.0);
 	move_group->setMaxAccelerationScalingFactor(0.5);
 	move_group->setMaxVelocityScalingFactor(0.2);
-	ROS_ERROR("moving");
 	move_group->asyncMove();
-	ROS_ERROR("done");
+	trajectory_status = TRAJECTORY_ACTIVE;
+	ROS_ERROR("Waiting on starting position...");
+
 	sleep(5.0);
+	waitForMotion();
 }
 
 int main(int argc, char **argv)
@@ -183,29 +218,35 @@ int main(int argc, char **argv)
 	ros::Subscriber control_sub = nh.subscribe("control_signal", 1, updateControlSignal);
 	ros::Subscriber traj_received = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/goal", 1, updateTrajectoryGoal);
 	ros::Subscriber status_sub = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/result", 1, updateTrajectoryStatus);
-	moveToStartingPose();
 	ros::AsyncSpinner spinner(3);
 	spinner.start();
+	moveToStartingPose();
 
 	ros::Rate r(30); //update check for new controls at 30 hz
-	geometry_msgs::Pose t_pose;
+	geometry_msgs::PoseStamped t_pose;
+	geometry_msgs::PoseStamped ideal_pose;
 	std_msgs::String msg;
 	geometry_msgs::PoseStamped c_pose;
+
+	//Save initial behavior
+	t_pose = move_group->getCurrentPose("wrist_roll_link");
+	ideal_pose = move_group->getCurrentPose("wrist_roll_link");
 	while(ros::ok())
 	{
 		if(controls_updated)
 		{
 			move_group->stop();
+			c_pose = move_group->getCurrentPose("wrist_roll_link");
+			updateIdealPose(&(ideal_pose.pose), c_pose.pose);
 			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
 				//set target based on current pose and control inputs
-				c_pose = move_group->getCurrentPose("wrist_roll_link");
-				chatter_pub.publish(c_pose);
-				getTarget(&(c_pose.pose), &t_pose);
+				//chatter_pub.publish(c_pose);
+				getTarget(&(t_pose.pose), ideal_pose.pose, c_pose.pose);
 				
 				 // set waypoints for which to compute path
 			    std::vector<geometry_msgs::Pose> waypoints;
-			    waypoints.push_back(t_pose);
+			    waypoints.push_back(t_pose.pose);
 			    moveit_msgs::ExecuteKnownTrajectory srv;
 
 			    // compute cartesian path
@@ -229,6 +270,21 @@ int main(int argc, char **argv)
 				    executeKnownTrajectoryServiceClient.call(srv);
 				    trajectory_status = TRAJECTORY_PENDING;
 			    }
+			}
+			else
+			{
+				// set waypoints for which to compute path
+			    std::vector<geometry_msgs::Pose> waypoints;
+			    waypoints.push_back(ideal_pose.pose);
+			    moveit_msgs::ExecuteKnownTrajectory srv;
+
+			    // compute cartesian path
+			    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, true); //the two magic numbers here are allowed distance between points (meters) and configuration space jump distance (units?)
+
+			    screenTrajectory(&srv.request.trajectory);
+			    // send trajectory to arm controller
+			    srv.request.wait_for_execution = false;
+			    executeKnownTrajectoryServiceClient.call(srv);
 			}
 			controls_updated = false;
 		}
