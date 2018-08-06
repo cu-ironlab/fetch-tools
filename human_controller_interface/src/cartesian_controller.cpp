@@ -205,7 +205,7 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "cartesian_controller");
 	ros::NodeHandle nh;
 	ros::ServiceClient executeKnownTrajectoryServiceClient = nh.serviceClient<moveit_msgs::ExecuteKnownTrajectory>("/execute_kinematic_path");
-	ros::Publisher chatter_pub = nh.advertise<geometry_msgs::PoseStamped>("controller_debug", 1000);
+	ros::Publisher chatter_pub = nh.advertise<geometry_msgs::PoseStamped>("robot_state", 1000);
 
 	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
 	planning_scene_interface = new moveit::planning_interface::PlanningSceneInterface();
@@ -222,7 +222,7 @@ int main(int argc, char **argv)
 	spinner.start();
 	moveToStartingPose();
 
-	ros::Rate r(30); //update check for new controls at 30 hz
+	ros::Rate r(10); //update check for new controls at 10 hz
 	geometry_msgs::PoseStamped t_pose;
 	geometry_msgs::PoseStamped ideal_pose;
 	std_msgs::String msg;
@@ -233,15 +233,16 @@ int main(int argc, char **argv)
 	ideal_pose = move_group->getCurrentPose("wrist_roll_link");
 	while(ros::ok())
 	{
+		c_pose = move_group->getCurrentPose("wrist_roll_link");
+		chatter_pub.publish(c_pose);
+
 		if(controls_updated)
 		{
 			move_group->stop();
-			c_pose = move_group->getCurrentPose("wrist_roll_link");
 			updateIdealPose(&(ideal_pose.pose), c_pose.pose);
 			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
 				//set target based on current pose and control inputs
-				//chatter_pub.publish(c_pose);
 				getTarget(&(t_pose.pose), ideal_pose.pose, c_pose.pose);
 				
 				 // set waypoints for which to compute path
