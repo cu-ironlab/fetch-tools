@@ -128,7 +128,9 @@ include_directories(
 )
 
 add_executable(cartesian_keyboard_controller src/cartesian_keyboard_controller.cpp)
+add_executable(cartesian_controller src/cartesian_controller.cpp)
 target_link_libraries(cartesian_keyboard_controller ${catkin_LIBRARIES})
+target_link_libraries(cartesian_controller ${catkin_LIBRARIES})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
