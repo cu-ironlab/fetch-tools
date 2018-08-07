@@ -3,7 +3,7 @@
 import rospy
 import xml
 import sys
-import KeyboardController
+import src.InputController as InputController
 from moveit_msgs.msg import MoveItErrorCodes
 from moveit_python import MoveGroupInterface, PlanningSceneInterface
 from geometry_msgs.msg import PoseStamped, Pose, Point, Quaternion
@@ -16,14 +16,14 @@ def start_node():
 		sys.exit(-1)
 	controller_spec = xml.etree.ElementTree.parse(myargv[1])
 	keyboard_spec = xml.etree.ElementTree.parse(myargv[2])
-	kc = KeyboardController.DiscreteKeyboardController(controller_spec, keyboard_spec)
+	kc = InputController.DiscreteKeyboardController(controller_spec, keyboard_spec)
 	kc.start_listener()
 	return kc, int(myargv[3])
 
 
 if __name__ == '__main__':
     rospy.init_node("Robot_Controller")
-    pub = rospy.Publisher('control_signal',	CartesianControls, queue_size=1)
+    pub = rospy.Publisher('control_signal', CartesianControls, queue_size=1)
     kc, hz = start_node()
     rate = rospy.Rate(hz)
     while (not rospy.is_shutdown()):
