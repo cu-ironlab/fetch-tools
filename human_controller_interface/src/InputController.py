@@ -7,8 +7,11 @@ Connor Brooks
 connor.brooks@colorado.edu
 '''
 
+from sensor_msgs.msg import Joy
+import rospy
 import xml.etree.ElementTree
 import pynput
+import math
 import threading
  
 
@@ -92,3 +95,54 @@ class DiscreteKeyboardController(InputController):
 
 	def stop_listener(self):
 		self.listener.stop()
+
+"""
+Turns Xbox control inputs into cartesian control signals based on xml spec
+"""
+class CartesianXboxController(InputController):
+
+	def __init__(self, controller_spec, xbox_layout):
+		InputController.__init__(self, controller_spec)
+		self.control_handler = self.setup_control_function(xbox_layout)
+
+	def setup_control_function(self, layout):
+		self.controls_map = {}
+		for input_signal in layout.iter('key'):
+			input_index = input_signal.attrib['index']
+			input_type = input_signal.find('input_type').text
+			deadzone = float(input_signal.find('deadzone_threshold').text)
+			multiplier = float(input_signal.find('multiplier').text)
+			input_name = input_signal.find('input_name').text
+			self.controls_map[input_type+":"+str(input_index)] = {}
+			self.controls_map[input_type+":"+str(input_index)]['name'] = input_name
+			self.controls_map[input_type+":"+str(input_index)]['input_type'] = input_type
+			self.controls_map[input_type+":"+str(input_index)]['deadzone'] = deadzone
+			self.controls_map[input_type+":"+str(input_index)]['multiplier'] = multiplier
+	
+	def handle_controls_update(self, msg):
+		for input_index in self.controls_map:
+			if(self.controls_map[input_index]['input_type'] == 'joystick'):
+				signal = msg.axes[int(input_index.split(":")[1])]
+			elif(self.controls_map[input_index]['input_type'] == 'button'):
+				signal = msg.buttons[int(input_index.split(":")[1])]
+
+			if(abs(signal) < self.controls_map[input_index]['deadzone']):
+				self.control_dict[self.controls_map[input_index]['name']]['input'] = 0.0
+			else:
+				signal *= self.controls_map[input_index]['multiplier']
+				if(signal < 0.0):
+					self.control_dict[self.controls_map[input_index]['name']]['input'] = -1.0
+				else:
+					self.control_dict[self.controls_map[input_index]['name']]['input'] = 1.0
+		control_sum = sum([i['input']**2 for i in self.control_dict.values()])
+		
+		if(control_sum > 1.0):
+			for axis in self.control_dict:
+				self.control_dict[axis]['input'] /= math.sqrt(control_sum)
+
+
+	def start_listener(self):
+		self.sub = rospy.Subscriber("/joy", Joy, self.handle_controls_update)
+
+	def stop_listener(self):
+		self.sub.unregister()

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import rospy
 import xml
 import sys
@@ -11,27 +10,33 @@ from fetch_custom_msgs.msg import CartesianControls
 
 def start_node():
 	myargv = rospy.myargv(argv=sys.argv)
-	if(len(myargv) < 4):
-		print("ERROR: XML files for controller spec not given")
+	if(len(myargv) < 5):
+		print("ERROR: XML files for controller spec and/or control type not given")
 		sys.exit(-1)
 	controller_spec = xml.etree.ElementTree.parse(myargv[1])
-	keyboard_spec = xml.etree.ElementTree.parse(myargv[2])
-	kc = InputController.DiscreteKeyboardController(controller_spec, keyboard_spec)
+	button_spec = xml.etree.ElementTree.parse(myargv[2])
+	controller_type = str(myargv[3])
+	if(controller_type == "keyboard"):
+		kc = InputController.DiscreteKeyboardController(controller_spec, button_spec)
+	elif(controller_type == "xbox"):
+		kc = InputController.CartesianXboxController(controller_spec, button_spec)
+	else:
+		print("ERROR: unsupported control type")
+		sys.exit(-1)
 	kc.start_listener()
-	return kc, int(myargv[3])
-
+	return kc, int(myargv[4])
 
 if __name__ == '__main__':
-    rospy.init_node("Robot_Controller")
-    pub = rospy.Publisher('control_signal', CartesianControls, queue_size=1)
-    kc, hz = start_node()
-    rate = rospy.Rate(hz)
-    while (not rospy.is_shutdown()):
-    	controls = kc.get_all_controls()
-    	control_msg = CartesianControls()
-    	control_msg.x_axis = controls["x_axis"]["input"]
-    	control_msg.y_axis = controls["y_axis"]["input"]
-    	control_msg.z_axis = controls["z_axis"]["input"]
-    	pub.publish(control_msg)
-    	rate.sleep()
-    kc.stop_listener()
+	rospy.init_node("Robot_Controller")
+	pub = rospy.Publisher('control_signal', CartesianControls, queue_size=1)
+	kc, hz = start_node()
+	rate = rospy.Rate(hz)
+	while (not rospy.is_shutdown()):
+		controls = kc.get_all_controls()
+		control_msg = CartesianControls()
+		control_msg.x_axis = controls["x_axis"]["input"]
+		control_msg.y_axis = controls["y_axis"]["input"]
+		control_msg.z_axis = controls["z_axis"]["input"]
+		pub.publish(control_msg)
+		rate.sleep()
+	kc.stop_listener()
