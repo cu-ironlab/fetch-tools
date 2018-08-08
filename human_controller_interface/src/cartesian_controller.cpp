@@ -109,17 +109,17 @@ void getTarget(geometry_msgs::Pose* target_pose, geometry_msgs::Pose ideal_pose,
 	target_pose->position.z = ideal_pose.position.z;
 	if(control_signals[0] != 0.0)
 	{
-		target_pose->position.x += control_signals[0]*0.5;
+		target_pose->position.x += control_signals[0]*1.0;
 		last_movement_axis = 0;
 	}
 	if(control_signals[1] != 0.0)
 	{
-		target_pose->position.y += control_signals[1]*0.5;
+		target_pose->position.y += control_signals[1]*1.0;
 		last_movement_axis = 1;
 	}
 	if(control_signals[2] != 0.0)
 	{
-		target_pose->position.z += control_signals[2]*0.5;
+		target_pose->position.z += control_signals[2]*1.0;
 		last_movement_axis = 2;
 	}
 }
