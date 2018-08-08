@@ -31,7 +31,7 @@ const int TRAJECTORY_ACTIVE = 2;
 float control_signals [3] = {0.0, 0.0, 0.0};
 bool controls_updated = false;
 int trajectory_status = 0;
-int last_movement_axis = -1;
+bool last_movement_axis [3] = {false, false, false};
 
 static const std::string PLANNING_GROUP = "arm_with_torso";
 moveit::planning_interface::MoveGroup* move_group;
@@ -81,7 +81,8 @@ void addCollisionObjects(ros::ServiceClient sc)
 
 void updateControlSignal(const fetch_custom_msgs::CartesianControls::ConstPtr& msg)
 {
-	if(control_signals[0] != msg->x_axis || control_signals[1] != msg->y_axis || control_signals[2] != msg->z_axis)
+	float threshold_diff = 0.01;
+	if(std::abs(control_signals[0] - msg->x_axis) > threshold_diff || std::abs(control_signals[1] - msg->y_axis) > threshold_diff || std::abs(control_signals[2] - msg->z_axis) > threshold_diff)
 	{
 		control_signals[0] = msg->x_axis;
 		control_signals[1] = msg->y_axis;
@@ -110,33 +111,37 @@ void getTarget(geometry_msgs::Pose* target_pose, geometry_msgs::Pose ideal_pose,
 	if(control_signals[0] != 0.0)
 	{
 		target_pose->position.x += control_signals[0]*1.0;
-		last_movement_axis = 0;
+		last_movement_axis[0] = true;
 	}
 	if(control_signals[1] != 0.0)
 	{
 		target_pose->position.y += control_signals[1]*1.0;
-		last_movement_axis = 1;
+		last_movement_axis[1] = true;
 	}
 	if(control_signals[2] != 0.0)
 	{
 		target_pose->position.z += control_signals[2]*1.0;
-		last_movement_axis = 2;
+		last_movement_axis[2] = true;
 	}
 }
 
 void updateIdealPose(geometry_msgs::Pose* ideal_pose, geometry_msgs::Pose current_pose)
 {
-	if(last_movement_axis == 0)
+	if(last_movement_axis[0])
 	{
 		ideal_pose->position.x = current_pose.position.x;
-	} else if (last_movement_axis == 1)
+	}
+	if (last_movement_axis[1])
 	{
 		ideal_pose->position.y = current_pose.position.y;
-	} else if (last_movement_axis == 2)
+	}
+	if (last_movement_axis[2])
 	{
 		ideal_pose->position.z = current_pose.position.z;
 	}
-	last_movement_axis = -1;
+	last_movement_axis[0] = false;
+	last_movement_axis[1] = false;
+	last_movement_axis[2] = false;
 }
 
 void screenTrajectory(moveit_msgs::RobotTrajectory* orig_traj)
@@ -271,21 +276,6 @@ int main(int argc, char **argv)
 				    executeKnownTrajectoryServiceClient.call(srv);
 				    trajectory_status = TRAJECTORY_PENDING;
 			    }
-			}
-			else
-			{
-				// set waypoints for which to compute path
-			    std::vector<geometry_msgs::Pose> waypoints;
-			    waypoints.push_back(ideal_pose.pose);
-			    moveit_msgs::ExecuteKnownTrajectory srv;
-
-			    // compute cartesian path
-			    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, true); //the two magic numbers here are allowed distance between points (meters) and configuration space jump distance (units?)
-
-			    screenTrajectory(&srv.request.trajectory);
-			    // send trajectory to arm controller
-			    srv.request.wait_for_execution = false;
-			    executeKnownTrajectoryServiceClient.call(srv);
 			}
 			controls_updated = false;
 		}
