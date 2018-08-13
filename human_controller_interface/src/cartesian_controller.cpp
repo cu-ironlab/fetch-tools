@@ -2,6 +2,7 @@
 #include "geometry_msgs/PoseStamped.h"
 
 #include <fetch_custom_msgs/CartesianControls.h>
+#include <fetch_custom_msgs/CartesianControlsWithGripper.h>
 #include <fetch_custom_msgs/ObstacleList.h>
 
 #include <moveit/move_group_interface/move_group.h>
@@ -29,11 +30,13 @@ const int TRAJECTORY_PENDING = 1;
 const int TRAJECTORY_ACTIVE = 2;
 
 float control_signals [3] = {0.0, 0.0, 0.0};
+float gripper_control = 0.0;
 bool controls_updated = false;
 int trajectory_status = 0;
 bool last_movement_axis [3] = {false, false, false};
 
 static const std::string PLANNING_GROUP = "arm_with_torso";
+static const std::string GRIPPER_PLANNING_GROUP = "gripper";
 moveit::planning_interface::MoveGroup* move_group;
 moveit::planning_interface::PlanningSceneInterface* planning_scene_interface;
 const robot_state::JointModelGroup* joint_model_group;
@@ -79,15 +82,28 @@ void addCollisionObjects(ros::ServiceClient sc)
 	planning_scene_interface->addCollisionObjects(collision_objects);
 }
 
-void updateControlSignal(const fetch_custom_msgs::CartesianControls::ConstPtr& msg)
+void updateControlSignal(const fetch_custom_msgs::CartesianControlsWithGripper::ConstPtr& msg)
 {
 	float threshold_diff = 0.01;
-	if(std::abs(control_signals[0] - msg->x_axis) > threshold_diff || std::abs(control_signals[1] - msg->y_axis) > threshold_diff || std::abs(control_signals[2] - msg->z_axis) > threshold_diff)
+	if(!msg->gripper == 0.0)
 	{
-		control_signals[0] = msg->x_axis;
-		control_signals[1] = msg->y_axis;
-		control_signals[2] = msg->z_axis;
-		controls_updated = true;
+		if(std::abs(gripper_control - msg->gripper) > threshold_diff)
+		{
+			gripper_control = msg->gripper;
+			controls_updated = true;
+		}	
+	}
+	else
+	{
+		if(std::abs(control_signals[0] - msg->x_axis) > threshold_diff || std::abs(control_signals[1] - msg->y_axis) > threshold_diff || std::abs(control_signals[2] - msg->z_axis) > threshold_diff || std::abs(gripper_control - msg->gripper) > threshold_diff)
+		{
+			
+			control_signals[0] = msg->x_axis;
+			control_signals[1] = msg->y_axis;
+			control_signals[2] = msg->z_axis;
+			gripper_control = msg->gripper;
+			controls_updated = true;
+		}
 	}
 }
 
@@ -240,12 +256,15 @@ int main(int argc, char **argv)
 	{
 		c_pose = move_group->getCurrentPose("wrist_roll_link");
 		chatter_pub.publish(c_pose);
-
 		if(controls_updated)
 		{
 			move_group->stop();
 			updateIdealPose(&(ideal_pose.pose), c_pose.pose);
-			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
+
+			if(gripper_control != 0.0)
+			{
+				//TODO
+			} else if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
 				//set target based on current pose and control inputs
 				getTarget(&(t_pose.pose), ideal_pose.pose, c_pose.pose);

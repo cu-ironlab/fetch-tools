@@ -146,3 +146,32 @@ class CartesianXboxController(InputController):
 
 	def stop_listener(self):
 		self.sub.unregister()
+
+'''
+Adds gripper control
+'''
+class CartesianWGXboxController(CartesianXboxController):
+	def handle_controls_update(self, msg):
+		for input_index in self.controls_map:
+			if(self.controls_map[input_index]['input_type'] == 'joystick'):
+				signal = msg.axes[int(input_index.split(":")[1])]
+			elif(self.controls_map[input_index]['input_type'] == 'button'):
+				signal = msg.buttons[int(input_index.split(":")[1])]
+
+			if(abs(signal) < self.controls_map[input_index]['deadzone']):
+				self.control_dict[self.controls_map[input_index]['name']]['input'] = 0.0
+			else:
+				signal *= self.controls_map[input_index]['multiplier']
+				if(signal < 0.0):
+					self.control_dict[self.controls_map[input_index]['name']]['input'] = -1.0
+				else:
+					self.control_dict[self.controls_map[input_index]['name']]['input'] = 1.0
+		control_sum = 0
+		for axis in self.control_dict:
+			if(not axis == "gripper"):
+				control_sum += self.control_dict[axis]['input']**2
+
+		if(control_sum > 1.0):
+			for axis in self.control_dict:
+				if(not axis == "gripper"):
+					self.control_dict[axis]['input'] /= math.sqrt(control_sum)
