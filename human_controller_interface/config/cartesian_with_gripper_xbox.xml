@@ -21,12 +21,13 @@
 	<key index='0'>
 		<input_name>gripper</input_name>
 		<input_type>button</input_type>
-		<deadzone_threshold>0.3</deadzone_threshold>
+		<deadzone_threshold>0.1</deadzone_threshold>
 		<multiplier>1.0</multiplier>
 	</key>
 	<key index='1'>
 		<input_name>gripper</input_name>
 		<input_type>button</input_type>
-		<deadzone_threshold>0.3</deadzone_threshold>
+		<deadzone_threshold>0.1</deadzone_threshold>
 		<multiplier>-1.0</multiplier>
+	</key>
 </data>

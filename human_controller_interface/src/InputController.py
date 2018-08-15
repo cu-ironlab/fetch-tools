@@ -120,15 +120,17 @@ class CartesianXboxController(InputController):
 			self.controls_map[input_type+":"+str(input_index)]['multiplier'] = multiplier
 	
 	def handle_controls_update(self, msg):
+		#first zero out all old controls
+		for axis in self.control_dict:
+			self.control_dict[axis]['input'] = 0.0
+
 		for input_index in self.controls_map:
 			if(self.controls_map[input_index]['input_type'] == 'joystick'):
 				signal = msg.axes[int(input_index.split(":")[1])]
 			elif(self.controls_map[input_index]['input_type'] == 'button'):
 				signal = msg.buttons[int(input_index.split(":")[1])]
 
-			if(abs(signal) < self.controls_map[input_index]['deadzone']):
-				self.control_dict[self.controls_map[input_index]['name']]['input'] = 0.0
-			else:
+			if(abs(signal) > self.controls_map[input_index]['deadzone']):
 				signal *= self.controls_map[input_index]['multiplier']
 				if(signal < 0.0):
 					self.control_dict[self.controls_map[input_index]['name']]['input'] = -1.0
@@ -152,15 +154,17 @@ Adds gripper control
 '''
 class CartesianWGXboxController(CartesianXboxController):
 	def handle_controls_update(self, msg):
+		#first zero out all old controls
+		for axis in self.control_dict:
+			self.control_dict[axis]['input'] = 0.0
+
 		for input_index in self.controls_map:
 			if(self.controls_map[input_index]['input_type'] == 'joystick'):
 				signal = msg.axes[int(input_index.split(":")[1])]
 			elif(self.controls_map[input_index]['input_type'] == 'button'):
 				signal = msg.buttons[int(input_index.split(":")[1])]
 
-			if(abs(signal) < self.controls_map[input_index]['deadzone']):
-				self.control_dict[self.controls_map[input_index]['name']]['input'] = 0.0
-			else:
+			if(abs(signal) > self.controls_map[input_index]['deadzone']):
 				signal *= self.controls_map[input_index]['multiplier']
 				if(signal < 0.0):
 					self.control_dict[self.controls_map[input_index]['name']]['input'] = -1.0

@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_python
   roscpp
   rospy
+  actionlib
   std_msgs
   fetch_custom_msgs
 )
@@ -112,7 +113,7 @@ catkin_python_setup()
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES human_controller_interface
- CATKIN_DEPENDS moveit_core moveit_ros_planning_interface moveit_msgs moveit_python roscpp rospy std_msgs 
+ CATKIN_DEPENDS moveit_core moveit_ros_planning_interface moveit_msgs moveit_python roscpp rospy std_msgs actionlib
 #  DEPENDS system_lib
 )
 

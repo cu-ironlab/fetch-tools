@@ -1,7 +1,6 @@
 #include "ros/ros.h"
 #include "geometry_msgs/PoseStamped.h"
 
-#include <fetch_custom_msgs/CartesianControls.h>
 #include <fetch_custom_msgs/CartesianControlsWithGripper.h>
 #include <fetch_custom_msgs/ObstacleList.h>
 
@@ -20,6 +19,8 @@
 #include <std_msgs/String.h>
 #include <control_msgs/FollowJointTrajectoryActionGoal.h>
 #include <control_msgs/FollowJointTrajectoryActionResult.h>
+#include <control_msgs/GripperCommandAction.h>
+#include <actionlib/client/simple_action_client.h>
 
 #include <time.h>
 #include <stdio.h>
@@ -226,6 +227,7 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "cartesian_controller");
 	ros::NodeHandle nh;
 	ros::ServiceClient executeKnownTrajectoryServiceClient = nh.serviceClient<moveit_msgs::ExecuteKnownTrajectory>("/execute_kinematic_path");
+	actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripperClient("/gripper_controller/gripper_action");
 	ros::Publisher chatter_pub = nh.advertise<geometry_msgs::PoseStamped>("robot_state", 1000);
 
 	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
@@ -239,6 +241,7 @@ int main(int argc, char **argv)
 	ros::Subscriber control_sub = nh.subscribe("automated_control_signal", 1, updateControlSignal);
 	ros::Subscriber traj_received = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/goal", 1, updateTrajectoryGoal);
 	ros::Subscriber status_sub = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/result", 1, updateTrajectoryStatus);
+	ros::Publisher gripper_status = nh.advertise<std_msgs::String>("/gripper_status", 1);
 	ros::AsyncSpinner spinner(3);
 	spinner.start();
 	moveToStartingPose();
@@ -263,7 +266,21 @@ int main(int argc, char **argv)
 
 			if(gripper_control != 0.0)
 			{
-				//TODO
+				control_msgs::GripperCommandGoal srv;
+				std_msgs::String gripper_msg;
+				if(gripper_control < 0.0)
+				{
+					srv.command.position = 0.1;
+					gripper_msg.data = "OPEN";
+				} else
+				{
+					srv.command.position = 0.0;
+					gripper_msg.data = "CLOSED";
+				}
+				srv.command.max_effort = 50; //TODO: find out a reasonable number
+				gripperClient.cancelAllGoals();
+				gripperClient.sendGoalAndWait(srv, ros::Duration(3,0), ros::Duration(3,0));
+				gripper_status.publish(gripper_msg);
 			} else if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
 				//set target based on current pose and control inputs

@@ -1,5 +1,5 @@
 <launch>
 	<node name="get_obstacle_objects" pkg="human_controller_interface" type="get_obstacle_objects.py" args="$(find human_controller_interface)/config/table_and_ground_obstacles.xml"/>
-	<node name="controller_publisher" pkg="human_controller_interface" type="controller_publisher.py" args="$(find human_controller_interface)/config/cartesian.xml $(find human_controller_interface)/config/cartesian_xbox.xml xbox 10"/>
+	<node name="controller_publisher" pkg="human_controller_interface" type="controller_publisher.py" args="$(find human_controller_interface)/config/cartesian_with_gripper.xml $(find human_controller_interface)/config/cartesian_with_gripper_xbox.xml xbox 10"/>
 	<node name="cartesian_controller" pkg="human_controller_interface" type="cartesian_controller" />
 </launch>
