@@ -228,7 +228,7 @@ int main(int argc, char **argv)
 	ros::NodeHandle nh;
 	ros::ServiceClient executeKnownTrajectoryServiceClient = nh.serviceClient<moveit_msgs::ExecuteKnownTrajectory>("/execute_kinematic_path");
 	actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripperClient("/gripper_controller/gripper_action");
-	ros::Publisher chatter_pub = nh.advertise<geometry_msgs::PoseStamped>("robot_state", 1000);
+	//ros::Publisher chatter_pub = nh.advertise<geometry_msgs::PoseStamped>("robot_state", 1000);
 
 	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
 	planning_scene_interface = new moveit::planning_interface::PlanningSceneInterface();
@@ -250,6 +250,10 @@ int main(int argc, char **argv)
 	geometry_msgs::PoseStamped t_pose;
 	geometry_msgs::PoseStamped ideal_pose;
 	std_msgs::String msg;
+	std_msgs::String pause_msg;
+	pause_msg.data = "ACTIVE";
+	std_msgs::String resume_msg;
+	resume_msg.data = "INACTIVE";
 	geometry_msgs::PoseStamped c_pose;
 
 	//Save initial behavior
@@ -258,7 +262,7 @@ int main(int argc, char **argv)
 	while(ros::ok())
 	{
 		c_pose = move_group->getCurrentPose("wrist_roll_link");
-		chatter_pub.publish(c_pose);
+		//chatter_pub.publish(c_pose);
 		if(controls_updated)
 		{
 			move_group->stop();
@@ -277,9 +281,11 @@ int main(int argc, char **argv)
 					srv.command.position = 0.0;
 					gripper_msg.data = "CLOSED";
 				}
-				srv.command.max_effort = 50; //TODO: find out a reasonable number
+				srv.command.max_effort = 50;
 				gripperClient.cancelAllGoals();
-				gripperClient.sendGoalAndWait(srv, ros::Duration(3,0), ros::Duration(3,0));
+				gripper_status.publish(pause_msg);
+				gripperClient.sendGoalAndWait(srv, ros::Duration(5,0), ros::Duration(5,0));
+				gripper_status.publish(resume_msg);
 				gripper_status.publish(gripper_msg);
 			} else if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
