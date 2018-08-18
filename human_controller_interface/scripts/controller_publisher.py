@@ -29,7 +29,7 @@ def start_node():
 
 if __name__ == '__main__':
 	rospy.init_node("Robot_Controller")
-	pub = rospy.Publisher('control_signal', CartesianControlsWithGripper, queue_size=1)
+	pub = rospy.Publisher('/sa_experiment/control_signal', CartesianControlsWithGripper, queue_size=1)
 	kc, hz = start_node()
 	rate = rospy.Rate(hz)
 	while (not rospy.is_shutdown()):

@@ -144,7 +144,7 @@ class CartesianXboxController(InputController):
 
 
 	def start_listener(self):
-		self.sub = rospy.Subscriber("/joy", Joy, self.handle_controls_update)
+		self.sub = rospy.Subscriber("/sa_experiment/joy", Joy, self.handle_controls_update)
 
 	def stop_listener(self):
 		self.sub.unregister()

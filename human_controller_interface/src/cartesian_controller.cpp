@@ -46,7 +46,7 @@ geometry_msgs::Pose starting_pose;
 void addCollisionObjects(ros::ServiceClient sc)
 {
 	fetch_custom_msgs::ObstacleList srv;
-	ros::service::waitForService("/get_obstacle_objects", -1);
+	ros::service::waitForService("/sa_experiment/get_obstacle_objects", -1);
 	srv.request.request_string = "ObstacleList";
 	if(!sc.call(srv))
 	{
@@ -228,7 +228,7 @@ int main(int argc, char **argv)
 	ros::NodeHandle nh;
 	ros::ServiceClient executeKnownTrajectoryServiceClient = nh.serviceClient<moveit_msgs::ExecuteKnownTrajectory>("/execute_kinematic_path");
 	actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripperClient("/gripper_controller/gripper_action");
-	//ros::Publisher chatter_pub = nh.advertise<geometry_msgs::PoseStamped>("robot_state", 1000);
+	ros::Publisher chatter_pub = nh.advertise<geometry_msgs::PoseStamped>("/sa_experiment/robot_state", 1000);
 
 	move_group = new moveit::planning_interface::MoveGroup(PLANNING_GROUP);
 	planning_scene_interface = new moveit::planning_interface::PlanningSceneInterface();
@@ -236,12 +236,12 @@ int main(int argc, char **argv)
 	robot_trajectory::RobotTrajectory rt_planner(move_group->getRobotModel(), PLANNING_GROUP);
 	trajectory_processing::IterativeParabolicTimeParameterization time_planner;
 
-	ros::ServiceClient getObstacleObjectsServiceClient = nh.serviceClient<fetch_custom_msgs::ObstacleList>("/get_obstacle_objects");
+	ros::ServiceClient getObstacleObjectsServiceClient = nh.serviceClient<fetch_custom_msgs::ObstacleList>("/sa_experiment/get_obstacle_objects");
 	addCollisionObjects(getObstacleObjectsServiceClient);
-	ros::Subscriber control_sub = nh.subscribe("automated_control_signal", 1, updateControlSignal);
+	ros::Subscriber control_sub = nh.subscribe("/sa_experiment/automated_control_signal", 1, updateControlSignal);
 	ros::Subscriber traj_received = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/goal", 1, updateTrajectoryGoal);
 	ros::Subscriber status_sub = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/result", 1, updateTrajectoryStatus);
-	ros::Publisher gripper_status = nh.advertise<std_msgs::String>("/gripper_status", 1);
+	ros::Publisher gripper_status = nh.advertise<std_msgs::String>("/sa_experiment/gripper_status", 1);
 	ros::AsyncSpinner spinner(3);
 	spinner.start();
 	moveToStartingPose();
@@ -262,7 +262,7 @@ int main(int argc, char **argv)
 	while(ros::ok())
 	{
 		c_pose = move_group->getCurrentPose("wrist_roll_link");
-		//chatter_pub.publish(c_pose);
+		chatter_pub.publish(c_pose);
 		if(controls_updated)
 		{
 			move_group->stop();
@@ -281,7 +281,7 @@ int main(int argc, char **argv)
 					srv.command.position = 0.0;
 					gripper_msg.data = "CLOSED";
 				}
-				srv.command.max_effort = 50;
+				srv.command.max_effort = 75;
 				gripperClient.cancelAllGoals();
 				gripper_status.publish(pause_msg);
 				gripperClient.sendGoalAndWait(srv, ros::Duration(5,0), ros::Duration(5,0));

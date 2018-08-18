@@ -45,7 +45,7 @@ def startup_server():
 		sys.exit(-1)
 	obstacle_spec = xml.etree.ElementTree.parse(myargv[1])
 	list_obstacles(obstacle_spec)
-	s = rospy.Service('get_obstacle_objects', ObstacleList, return_obstacles)
+	s = rospy.Service('/sa_experiment/get_obstacle_objects', ObstacleList, return_obstacles)
 	rospy.spin()
 
 if __name__ == "__main__":
