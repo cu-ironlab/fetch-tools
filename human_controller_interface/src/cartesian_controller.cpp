@@ -7,6 +7,7 @@
 #include <moveit/move_group_interface/move_group.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/trajectory_processing/iterative_time_parameterization.h>
+#include <moveit/robot_state/conversions.h>
 
 #include <moveit_msgs/DisplayRobotState.h>
 #include <moveit_msgs/DisplayTrajectory.h>
@@ -295,10 +296,10 @@ int main(int argc, char **argv)
 				 // set waypoints for which to compute path
 			    std::vector<geometry_msgs::Pose> waypoints;
 			    waypoints.push_back(t_pose.pose);
-			    moveit_msgs::ExecuteKnownTrajectory srv;
+			    moveit::planning_interface::MoveGroup::Plan plan;
 
 			    // compute cartesian path
-			    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, srv.request.trajectory, true); //the two magic numbers here are allowed distance between points (meters) and configuration space jump distance (units?)
+			    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, plan.trajectory_, true); //the two magic numbers here are allowed distance between points (meters) and configuration space jump distance (units?)
 
 			    if(ret <= 0.0){
 			        // no path could be computed or all paths caused collisions
@@ -308,15 +309,19 @@ int main(int argc, char **argv)
 			    else
 			    {
 			    	//add time stamps to trajectory to control velocity
-			    	rt_planner.setRobotTrajectoryMsg(*(move_group->getCurrentState()), srv.request.trajectory);
+			    	moveit::core::RobotState r_state(*(move_group->getCurrentState()));
+			    	moveit::core::robotStateToRobotStateMsg(r_state, plan.start_state_);
+			    	rt_planner.setRobotTrajectoryMsg(r_state, plan.trajectory_);
 				    time_planner.computeTimeStamps(rt_planner, 0.1, 0.5);
-				    rt_planner.getRobotTrajectoryMsg(srv.request.trajectory);
+				    rt_planner.getRobotTrajectoryMsg(plan.trajectory_);
 
-				    screenTrajectory(&srv.request.trajectory);
+				    screenTrajectory(&plan.trajectory_);
 				    // send trajectory to arm controller
-				    srv.request.wait_for_execution = false;
-				    executeKnownTrajectoryServiceClient.call(srv);
-				    trajectory_status = TRAJECTORY_PENDING;
+				    move_group->asyncExecute(plan);
+
+				    //srv.request.wait_for_execution = false;
+				    //executeKnownTrajectoryServiceClient.call(srv);
+				    //trajectory_status = TRAJECTORY_PENDING;
 			    }
 			}
 			controls_updated = false;
