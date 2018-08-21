@@ -41,8 +41,8 @@
 		<dim1_size>1.524</dim1_size>
 		<dim2_size>0.863</dim2_size>
 		<orientation_w>1.0</orientation_w>
-		<position_x>0.9145</position_x>
+		<position_x>0.0</position_x>
 		<position_y>0.0</position_y>
-		<position_z>0.4315</position_z>
+		<position_z>-0.4315</position_z>
 	</obstacle>
 </data>
