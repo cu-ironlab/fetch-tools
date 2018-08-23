@@ -19,8 +19,8 @@ def start_node():
 	if(controller_type == "keyboard"):
 		#TODO: update this to include with gripper
 		kc = InputController.DiscreteKeyboardController(controller_spec, button_spec)
-	elif(controller_type == "xbox"):
-		kc = InputController.CartesianWGXboxController(controller_spec, button_spec)
+	elif(controller_type == "game"):
+		kc = InputController.CartesianWGGameController(controller_spec, button_spec)
 	else:
 		print("ERROR: unsupported control type")
 		sys.exit(-1)

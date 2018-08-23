@@ -99,11 +99,11 @@ class DiscreteKeyboardController(InputController):
 """
 Turns Xbox control inputs into cartesian control signals based on xml spec
 """
-class CartesianXboxController(InputController):
+class CartesianGameController(InputController):
 
-	def __init__(self, controller_spec, xbox_layout):
+	def __init__(self, controller_spec, controller_layout):
 		InputController.__init__(self, controller_spec)
-		self.control_handler = self.setup_control_function(xbox_layout)
+		self.control_handler = self.setup_control_function(controller_layout)
 
 	def setup_control_function(self, layout):
 		self.controls_map = {}
@@ -144,7 +144,7 @@ class CartesianXboxController(InputController):
 
 
 	def start_listener(self):
-		self.sub = rospy.Subscriber("/sa_experiment/joy", Joy, self.handle_controls_update)
+		self.sub = rospy.Subscriber("/joy", Joy, self.handle_controls_update)
 
 	def stop_listener(self):
 		self.sub.unregister()
@@ -152,7 +152,7 @@ class CartesianXboxController(InputController):
 '''
 Adds gripper control
 '''
-class CartesianWGXboxController(CartesianXboxController):
+class CartesianWGGameController(CartesianGameController):
 	def handle_controls_update(self, msg):
 		#first zero out all old controls
 		for axis in self.control_dict:

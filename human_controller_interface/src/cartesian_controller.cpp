@@ -165,7 +165,7 @@ void updateIdealPose(geometry_msgs::Pose* ideal_pose, geometry_msgs::Pose curren
 void screenTrajectory(moveit_msgs::RobotTrajectory* orig_traj)
 {
 	//tune this to prevent major configuration space changes (which sometimes don't properly screen collisions)
-	float distance_cutoff = 3.0;
+	float distance_cutoff = 5.0;
 	std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator first = orig_traj->joint_trajectory.points.begin() + 0;
 	std::vector<trajectory_msgs::JointTrajectoryPoint>::const_iterator last = orig_traj->joint_trajectory.points.begin() + orig_traj->joint_trajectory.points.size();
 	int i;
@@ -201,6 +201,22 @@ void waitForMotion()
 
 void moveToStartingPose()
 {
+	std::map<std::string, double> starting_joints;
+	starting_joints["l_wheel_joint"] = -0.9032078981399536;
+	starting_joints["r_wheel_joint"] = 5.42605447769165;
+	starting_joints["torso_lift_joint"] = 0.08102470636367798;
+	starting_joints["bellows_joint"] = 0.023;
+	starting_joints["head_pan_joint"] = 0.0;
+	starting_joints["head_tilt_joint"] = 0.0;
+	starting_joints["shoulder_pan_joint"] = -0.3462909834655762;
+	starting_joints["shoulder_lift_joint"] = -0.843686143170166;
+	starting_joints["upperarm_roll_joint"] = 1.5054138913101196;
+	starting_joints["elbow_flex_joint"] = 2.1984014634521483;
+	starting_joints["forearm_roll_joint"] = 0.7320428009094239;
+	starting_joints["wrist_flex_joint"] = -1.6753571946136474;
+	starting_joints["wrist_roll_joint"] = -1.0278263550117492;
+	/*
+
 	starting_pose.orientation.w = 1.0;
 	starting_pose.orientation.x = 0.0;
 	starting_pose.orientation.y = 0.0;
@@ -210,8 +226,9 @@ void moveToStartingPose()
 	starting_pose.position.y = -0.1;
 	starting_pose.position.z = 1.1;
 
-	moveit::planning_interface::MoveGroup::Plan my_plan;
 	move_group->setPoseTarget(starting_pose);
+	*/
+	move_group->setJointValueTarget(starting_joints);
 	move_group->setPlanningTime(5.0);
 	move_group->setMaxAccelerationScalingFactor(0.5);
 	move_group->setMaxVelocityScalingFactor(0.2);
@@ -299,7 +316,7 @@ int main(int argc, char **argv)
 			    moveit::planning_interface::MoveGroup::Plan plan;
 
 			    // compute cartesian path
-			    double ret = move_group->computeCartesianPath(waypoints, 0.1, 10000, plan.trajectory_, true); //the two magic numbers here are allowed distance between points (meters) and configuration space jump distance (units?)
+			    double ret = move_group->computeCartesianPath(waypoints, 0.05, 10000, plan.trajectory_, true); //the two magic numbers here are allowed distance between points (meters) and configuration space jump distance (units?)
 
 			    if(ret <= 0.0){
 			        // no path could be computed or all paths caused collisions
@@ -312,7 +329,7 @@ int main(int argc, char **argv)
 			    	moveit::core::RobotState r_state(*(move_group->getCurrentState()));
 			    	moveit::core::robotStateToRobotStateMsg(r_state, plan.start_state_);
 			    	rt_planner.setRobotTrajectoryMsg(r_state, plan.trajectory_);
-				    time_planner.computeTimeStamps(rt_planner, 0.1, 0.5);
+				    time_planner.computeTimeStamps(rt_planner, 0.05, 0.8);
 				    rt_planner.getRobotTrajectoryMsg(plan.trajectory_);
 
 				    screenTrajectory(&plan.trajectory_);
