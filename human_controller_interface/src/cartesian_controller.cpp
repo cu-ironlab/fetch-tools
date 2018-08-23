@@ -329,16 +329,12 @@ int main(int argc, char **argv)
 			    	moveit::core::RobotState r_state(*(move_group->getCurrentState()));
 			    	moveit::core::robotStateToRobotStateMsg(r_state, plan.start_state_);
 			    	rt_planner.setRobotTrajectoryMsg(r_state, plan.trajectory_);
-				    time_planner.computeTimeStamps(rt_planner, 0.05, 0.8);
+				    time_planner.computeTimeStamps(rt_planner, 0.05, 1.0);
 				    rt_planner.getRobotTrajectoryMsg(plan.trajectory_);
 
 				    screenTrajectory(&plan.trajectory_);
 				    // send trajectory to arm controller
 				    move_group->asyncExecute(plan);
-
-				    //srv.request.wait_for_execution = false;
-				    //executeKnownTrajectoryServiceClient.call(srv);
-				    //trajectory_status = TRAJECTORY_PENDING;
 			    }
 			}
 			controls_updated = false;
