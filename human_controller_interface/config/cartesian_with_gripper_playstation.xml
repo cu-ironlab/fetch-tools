@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<data>
+	<key index='0'>
+		<input_name>y_axis</input_name>
+		<input_type>joystick</input_type>
+		<deadzone_threshold>0.5</deadzone_threshold>
+		<multiplier>1.0</multiplier>
+	</key>
+	<key index='1'>
+		<input_name>x_axis</input_name>
+		<input_type>joystick</input_type>
+		<deadzone_threshold>0.5</deadzone_threshold>
+		<multiplier>1.0</multiplier>
+	</key>
+	<key index='3'>
+		<input_name>z_axis</input_name>
+		<input_type>joystick</input_type>
+		<deadzone_threshold>0.5</deadzone_threshold>
+		<multiplier>1.0</multiplier>
+	</key>
+	<key index='15'>
+		<input_name>gripper</input_name>
+		<input_type>button</input_type>
+		<deadzone_threshold>0.1</deadzone_threshold>
+		<multiplier>1.0</multiplier>
+	</key>
+	<key index='13'>
+		<input_name>gripper</input_name>
+		<input_type>button</input_type>
+		<deadzone_threshold>0.1</deadzone_threshold>
+		<multiplier>-1.0</multiplier>
+	</key>
+</data>

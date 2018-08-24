@@ -23,6 +23,7 @@
 #include <control_msgs/GripperCommandAction.h>
 #include <actionlib/client/simple_action_client.h>
 
+#include <ctime>
 #include <time.h>
 #include <stdio.h>
 #include <cmath>
@@ -202,31 +203,22 @@ void waitForMotion()
 void moveToStartingPose()
 {
 	std::map<std::string, double> starting_joints;
-	starting_joints["l_wheel_joint"] = -0.9032078981399536;
-	starting_joints["r_wheel_joint"] = 5.42605447769165;
+	starting_joints["l_wheel_joint"] = -3.936939239501953;
+	starting_joints["r_wheel_joint"] = 4.5019025802612305;
 	starting_joints["torso_lift_joint"] = 0.08102470636367798;
-	starting_joints["bellows_joint"] = 0.023;
-	starting_joints["head_pan_joint"] = 0.0;
-	starting_joints["head_tilt_joint"] = 0.0;
-	starting_joints["shoulder_pan_joint"] = -0.3462909834655762;
-	starting_joints["shoulder_lift_joint"] = -0.843686143170166;
-	starting_joints["upperarm_roll_joint"] = 1.5054138913101196;
-	starting_joints["elbow_flex_joint"] = 2.1984014634521483;
-	starting_joints["forearm_roll_joint"] = 0.7320428009094239;
-	starting_joints["wrist_flex_joint"] = -1.6753571946136474;
-	starting_joints["wrist_roll_joint"] = -1.0278263550117492;
+	starting_joints["bellows_joint"] = 0.046;
+	starting_joints["head_pan_joint"] = 0.001977384090423584;
+	starting_joints["head_tilt_joint"] = -0.03306894541473389;
+	starting_joints["shoulder_pan_joint"] = -0.38272324970092775;
+	starting_joints["shoulder_lift_joint"] = -0.8782005703552246;
+	starting_joints["upperarm_roll_joint"] = 1.5694576516098022;
+	starting_joints["elbow_flex_joint"] = 2.1976344708831785;
+	starting_joints["forearm_roll_joint"] = 0.8121936435760498;
+	starting_joints["wrist_flex_joint"] = -1.6063281018249511;
+	starting_joints["wrist_roll_joint"] = -1.0868846040084839;
 	/*
 
-	starting_pose.orientation.w = 1.0;
-	starting_pose.orientation.x = 0.0;
-	starting_pose.orientation.y = 0.0;
-	starting_pose.orientation.z = 0.0;
-
-	starting_pose.position.x = 0.4;
-	starting_pose.position.y = -0.1;
-	starting_pose.position.z = 1.1;
-
-	move_group->setPoseTarget(starting_pose);
+	
 	*/
 	move_group->setJointValueTarget(starting_joints);
 	move_group->setPlanningTime(5.0);
@@ -264,7 +256,7 @@ int main(int argc, char **argv)
 	spinner.start();
 	moveToStartingPose();
 
-	ros::Rate r(10); //update check for new controls at 10 hz
+	ros::Rate r(100); //update check for new controls at 10 hz
 	geometry_msgs::PoseStamped t_pose;
 	geometry_msgs::PoseStamped ideal_pose;
 	std_msgs::String msg;
@@ -273,6 +265,7 @@ int main(int argc, char **argv)
 	std_msgs::String resume_msg;
 	resume_msg.data = "INACTIVE";
 	geometry_msgs::PoseStamped c_pose;
+	std::clock_t last_movement_started;
 
 	//Save initial behavior
 	t_pose = move_group->getCurrentPose("wrist_roll_link");
@@ -285,7 +278,7 @@ int main(int argc, char **argv)
 		{
 			move_group->stop();
 			updateIdealPose(&(ideal_pose.pose), c_pose.pose);
-
+			
 			if(gripper_control != 0.0)
 			{
 				control_msgs::GripperCommandGoal srv;
@@ -338,24 +331,30 @@ int main(int argc, char **argv)
 			    }
 			}
 			controls_updated = false;
+			last_movement_started = clock();
 		}
 		else
 		{
 			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
-				//if controls are being held down but no movement is active, try replanning
-				if(trajectory_status == TRAJECTORY_INACTIVE)
+				//check if more than 0.5 seconds have passed since movement was supposed to start
+				clock_t end = clock();
+				if ((double(end - last_movement_started) / CLOCKS_PER_SEC) >= 0.5)
 				{
-					//TODO: maybe don't do this at quite as fast of a rate
-					//refresh planning
-					controls_updated = true;
-				}
-				else
-				{
-					if(trajectory_status == TRAJECTORY_PENDING)
+					//if controls are being held down but no movement is active, try replanning
+					if(trajectory_status == TRAJECTORY_INACTIVE)
 					{
-						//if trajectory was sent but not received, replan
+						//TODO: maybe don't do this at quite as fast of a rate
+						//refresh planning
 						controls_updated = true;
+					}
+					else
+					{
+						if(trajectory_status == TRAJECTORY_PENDING)
+						{
+							//if trajectory was sent but not received, replan
+							controls_updated = true;
+						}
 					}
 				}
 			}
