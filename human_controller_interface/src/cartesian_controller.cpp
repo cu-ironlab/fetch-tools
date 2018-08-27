@@ -23,7 +23,6 @@
 #include <control_msgs/GripperCommandAction.h>
 #include <actionlib/client/simple_action_client.h>
 
-#include <ctime>
 #include <time.h>
 #include <stdio.h>
 #include <cmath>
@@ -129,17 +128,17 @@ void getTarget(geometry_msgs::Pose* target_pose, geometry_msgs::Pose ideal_pose,
 	target_pose->position.z = ideal_pose.position.z;
 	if(control_signals[0] != 0.0)
 	{
-		target_pose->position.x += control_signals[0]*1.0;
+		target_pose->position.x += control_signals[0]*0.35;
 		last_movement_axis[0] = true;
 	}
 	if(control_signals[1] != 0.0)
 	{
-		target_pose->position.y += control_signals[1]*1.0;
+		target_pose->position.y += control_signals[1]*0.35;
 		last_movement_axis[1] = true;
 	}
 	if(control_signals[2] != 0.0)
 	{
-		target_pose->position.z += control_signals[2]*1.0;
+		target_pose->position.z += control_signals[2]*0.35;
 		last_movement_axis[2] = true;
 	}
 }
@@ -265,7 +264,7 @@ int main(int argc, char **argv)
 	std_msgs::String resume_msg;
 	resume_msg.data = "INACTIVE";
 	geometry_msgs::PoseStamped c_pose;
-	std::clock_t last_movement_started;
+	ros::Time last_movement_started;
 
 	//Save initial behavior
 	t_pose = move_group->getCurrentPose("wrist_roll_link");
@@ -331,20 +330,20 @@ int main(int argc, char **argv)
 			    }
 			}
 			controls_updated = false;
-			last_movement_started = clock();
+			last_movement_started = ros::Time::now();
 		}
 		else
 		{
 			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
 				//check if more than 0.5 seconds have passed since movement was supposed to start
-				clock_t end = clock();
-				if ((double(end - last_movement_started) / CLOCKS_PER_SEC) >= 0.5)
+				ros::Duration end = ros::Time::now() - last_movement_started;
+				if (double(end.toSec()) >= 0.5)
 				{
 					//if controls are being held down but no movement is active, try replanning
 					if(trajectory_status == TRAJECTORY_INACTIVE)
 					{
-						//TODO: maybe don't do this at quite as fast of a rate
+						ROS_ERROR("Replanning");
 						//refresh planning
 						controls_updated = true;
 					}
