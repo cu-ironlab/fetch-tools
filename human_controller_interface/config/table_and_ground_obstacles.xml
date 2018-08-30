@@ -81,4 +81,22 @@
 		<position_y>-0.425</position_y>
 		<position_z>0.0325</position_z>
 	</obstacle>
+	<obstacle name='left_baskets'>
+		<dim0_size>0.21</dim0_size>
+		<dim1_size>0.24</dim1_size>
+		<dim2_size>0.3</dim2_size>
+		<orientation_w>1.0</orientation_w>
+		<position_x>-0.53</position_x>
+		<position_y>0.4315</position_y>
+		<position_z>-0.15</position_z>
+	</obstacle>
+	<obstacle name='right_baskets'>
+		<dim0_size>0.21</dim0_size>
+		<dim1_size>0.24</dim1_size>
+		<dim2_size>0.3</dim2_size>
+		<orientation_w>1.0</orientation_w>
+		<position_x>-0.53</position_x>
+		<position_y>-0.4315</position_y>
+		<position_z>-0.15</position_z>
+	</obstacle>
 </data>
