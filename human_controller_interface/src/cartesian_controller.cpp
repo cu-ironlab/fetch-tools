@@ -43,6 +43,7 @@ moveit::planning_interface::MoveGroup* move_group;
 moveit::planning_interface::PlanningSceneInterface* planning_scene_interface;
 const robot_state::JointModelGroup* joint_model_group;
 geometry_msgs::Pose starting_pose;
+ros::Publisher gripper_status;
 
 void addCollisionObjects(ros::ServiceClient sc)
 {
@@ -231,6 +232,18 @@ void moveToStartingPose()
 	waitForMotion();
 }
 
+void resetPosition(const std_msgs::String& msg)
+{
+	std_msgs::String pause_msg;
+	pause_msg.data = "ACTIVE";
+	std_msgs::String resume_msg;
+	resume_msg.data = "INACTIVE";
+
+	gripper_status.publish(pause_msg);
+	moveToStartingPose();
+	gripper_status.publish(resume_msg);
+}
+
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "cartesian_controller");
@@ -250,7 +263,8 @@ int main(int argc, char **argv)
 	ros::Subscriber control_sub = nh.subscribe("/sa_experiment/automated_control_signal", 1, updateControlSignal);
 	ros::Subscriber traj_received = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/goal", 1, updateTrajectoryGoal);
 	ros::Subscriber status_sub = nh.subscribe("arm_with_torso_controller/follow_joint_trajectory/result", 1, updateTrajectoryStatus);
-	ros::Publisher gripper_status = nh.advertise<std_msgs::String>("/sa_experiment/gripper_status", 1);
+	ros::Subscriber reset_sub = nh.subscribe("/arm_position_reset", 1, resetPosition);
+	gripper_status = nh.advertise<std_msgs::String>("/sa_experiment/gripper_status", 1);
 	ros::AsyncSpinner spinner(3);
 	spinner.start();
 	moveToStartingPose();
@@ -321,7 +335,7 @@ int main(int argc, char **argv)
 			    	moveit::core::RobotState r_state(*(move_group->getCurrentState()));
 			    	moveit::core::robotStateToRobotStateMsg(r_state, plan.start_state_);
 			    	rt_planner.setRobotTrajectoryMsg(r_state, plan.trajectory_);
-				    time_planner.computeTimeStamps(rt_planner, 0.05, 1.0);
+				    time_planner.computeTimeStamps(rt_planner, 0.075, 1.0);
 				    rt_planner.getRobotTrajectoryMsg(plan.trajectory_);
 
 				    screenTrajectory(&plan.trajectory_);

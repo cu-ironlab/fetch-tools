@@ -218,6 +218,7 @@ int main(int argc, char **argv)
 	robot_trajectory::RobotTrajectory rt_planner(move_group->getRobotModel(), PLANNING_GROUP);
 	trajectory_processing::IterativeParabolicTimeParameterization time_planner;
 
+	ROS_ERROR("Adding collision objects...");
 	ros::ServiceClient getObstacleObjectsServiceClient = nh.serviceClient<fetch_custom_msgs::ObstacleList>("/get_obstacle_objects");
 	addCollisionObjects(getObstacleObjectsServiceClient);
 	ros::Subscriber control_sub = nh.subscribe("control_signal", 1, updateControlSignal);
