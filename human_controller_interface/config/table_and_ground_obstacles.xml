@@ -39,64 +39,10 @@
 	<obstacle name='table'>
 		<dim0_size>0.86</dim0_size>
 		<dim1_size>1.524</dim1_size>
-		<dim2_size>0.863</dim2_size>
+		<dim2_size>0.83</dim2_size>
 		<orientation_w>1.0</orientation_w>
 		<position_x>0.0</position_x>
 		<position_y>0.0</position_y>
 		<position_z>-0.4315</position_z>
-	</obstacle>
-	<obstacle name='box1'>
-		<dim0_size>0.185</dim0_size>
-		<dim1_size>0.185</dim1_size>
-		<dim2_size>0.185</dim2_size>
-		<orientation_w>1.0</orientation_w>
-		<position_x>-0.075</position_x>
-		<position_y>0.6</position_y>
-		<position_z>0.0925</position_z>
-	</obstacle>
-	<obstacle name='book1'>
-		<dim0_size>0.23</dim0_size>
-		<dim1_size>0.18</dim1_size>
-		<dim2_size>0.055</dim2_size>
-		<orientation_w>1.0</orientation_w>
-		<position_x>0.1875</position_x>
-		<position_y>0.145</position_y>
-		<position_z>0.0275</position_z>
-	</obstacle>
-	<obstacle name='box2'>
-		<dim0_size>0.185</dim0_size>
-		<dim1_size>0.185</dim1_size>
-		<dim2_size>0.185</dim2_size>
-		<orientation_w>1.0</orientation_w>
-		<position_x>0.1425</position_x>
-		<position_y>-0.1325</position_y>
-		<position_z>0.0925</position_z>
-	</obstacle>
-	<obstacle name='book2'>
-		<dim0_size>0.24</dim0_size>
-		<dim1_size>0.1875</dim1_size>
-		<dim2_size>0.065</dim2_size>
-		<orientation_w>1.0</orientation_w>
-		<position_x>0.1275</position_x>
-		<position_y>-0.425</position_y>
-		<position_z>0.0325</position_z>
-	</obstacle>
-	<obstacle name='left_baskets'>
-		<dim0_size>0.3</dim0_size>
-		<dim1_size>0.24</dim1_size>
-		<dim2_size>0.3</dim2_size>
-		<orientation_w>1.0</orientation_w>
-		<position_x>-0.58</position_x>
-		<position_y>0.4315</position_y>
-		<position_z>-0.713</position_z>
-	</obstacle>
-	<obstacle name='right_baskets'>
-		<dim0_size>0.3</dim0_size>
-		<dim1_size>0.24</dim1_size>
-		<dim2_size>0.3</dim2_size>
-		<orientation_w>1.0</orientation_w>
-		<position_x>-0.58</position_x>
-		<position_y>-0.4315</position_y>
-		<position_z>-0.713</position_z>
 	</obstacle>
 </data>

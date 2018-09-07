@@ -44,6 +44,7 @@ moveit::planning_interface::PlanningSceneInterface* planning_scene_interface;
 const robot_state::JointModelGroup* joint_model_group;
 geometry_msgs::Pose starting_pose;
 ros::Publisher gripper_status;
+bool actively_listening = false;
 
 void addCollisionObjects(ros::ServiceClient sc)
 {
@@ -87,25 +88,27 @@ void addCollisionObjects(ros::ServiceClient sc)
 
 void updateControlSignal(const fetch_custom_msgs::CartesianControlsWithGripper::ConstPtr& msg)
 {
-	float threshold_diff = 0.01;
-	if(!msg->gripper == 0.0)
-	{
-		if(std::abs(gripper_control - msg->gripper) > threshold_diff)
+	if(actively_listening){
+		float threshold_diff = 0.01;
+		if(!msg->gripper == 0.0)
 		{
-			gripper_control = msg->gripper;
-			controls_updated = true;
-		}	
-	}
-	else
-	{
-		if(std::abs(control_signals[0] - msg->x_axis) > threshold_diff || std::abs(control_signals[1] - msg->y_axis) > threshold_diff || std::abs(control_signals[2] - msg->z_axis) > threshold_diff || std::abs(gripper_control - msg->gripper) > threshold_diff)
+			if(std::abs(gripper_control - msg->gripper) > threshold_diff)
+			{
+				gripper_control = msg->gripper;
+				controls_updated = true;
+			}	
+		}
+		else
 		{
-			
-			control_signals[0] = msg->x_axis;
-			control_signals[1] = msg->y_axis;
-			control_signals[2] = msg->z_axis;
-			gripper_control = msg->gripper;
-			controls_updated = true;
+			if(std::abs(control_signals[0] - msg->x_axis) > threshold_diff || std::abs(control_signals[1] - msg->y_axis) > threshold_diff || std::abs(control_signals[2] - msg->z_axis) > threshold_diff || std::abs(gripper_control - msg->gripper) > threshold_diff)
+			{
+				
+				control_signals[0] = msg->x_axis;
+				control_signals[1] = msg->y_axis;
+				control_signals[2] = msg->z_axis;
+				gripper_control = msg->gripper;
+				controls_updated = true;
+			}
 		}
 	}
 }
@@ -234,16 +237,24 @@ void moveToStartingPose()
 
 void resetPosition(const std_msgs::String& msg)
 {
+	actively_listening = false;
 	std_msgs::String pause_msg;
 	pause_msg.data = "ACTIVE";
 	std_msgs::String resume_msg;
 	resume_msg.data = "INACTIVE";
 
 	gripper_status.publish(pause_msg);
+	sleep(0.5);
 	move_group->stop();
+	controls_updated = false;
+	control_signals[0] = 0.0;
+	control_signals[1] = 0.0;
+	control_signals[2] = 0.0;
+	trajectory_status = TRAJECTORY_ACTIVE;
 	sleep(1.0);
 	moveToStartingPose();
 	gripper_status.publish(resume_msg);
+	actively_listening = true;
 }
 
 int main(int argc, char **argv)
@@ -285,11 +296,12 @@ int main(int argc, char **argv)
 	//Save initial behavior
 	t_pose = move_group->getCurrentPose("wrist_roll_link");
 	ideal_pose = move_group->getCurrentPose("wrist_roll_link");
+	actively_listening = true;
 	while(ros::ok())
 	{
 		c_pose = move_group->getCurrentPose("wrist_roll_link");
 		chatter_pub.publish(c_pose);
-		if(controls_updated)
+		if(actively_listening && controls_updated)
 		{
 			move_group->stop();
 			updateIdealPose(&(ideal_pose.pose), c_pose.pose);
@@ -337,7 +349,7 @@ int main(int argc, char **argv)
 			    	moveit::core::RobotState r_state(*(move_group->getCurrentState()));
 			    	moveit::core::robotStateToRobotStateMsg(r_state, plan.start_state_);
 			    	rt_planner.setRobotTrajectoryMsg(r_state, plan.trajectory_);
-				    time_planner.computeTimeStamps(rt_planner, 0.065, 1.0);
+				    time_planner.computeTimeStamps(rt_planner, 0.055, 1.0);
 				    rt_planner.getRobotTrajectoryMsg(plan.trajectory_);
 
 				    screenTrajectory(&plan.trajectory_);
@@ -350,7 +362,7 @@ int main(int argc, char **argv)
 		}
 		else
 		{
-			if(!(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
+			if(actively_listening && !(control_signals[0] == 0.0 && control_signals[1] == 0.0 && control_signals[2] == 0.0))
 			{
 				//check if more than 0.5 seconds have passed since movement was supposed to start
 				ros::Duration end = ros::Time::now() - last_movement_started;
