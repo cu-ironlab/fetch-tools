@@ -240,6 +240,8 @@ void resetPosition(const std_msgs::String& msg)
 	resume_msg.data = "INACTIVE";
 
 	gripper_status.publish(pause_msg);
+	move_group->stop();
+	sleep(1.0);
 	moveToStartingPose();
 	gripper_status.publish(resume_msg);
 }
@@ -335,7 +337,7 @@ int main(int argc, char **argv)
 			    	moveit::core::RobotState r_state(*(move_group->getCurrentState()));
 			    	moveit::core::robotStateToRobotStateMsg(r_state, plan.start_state_);
 			    	rt_planner.setRobotTrajectoryMsg(r_state, plan.trajectory_);
-				    time_planner.computeTimeStamps(rt_planner, 0.075, 1.0);
+				    time_planner.computeTimeStamps(rt_planner, 0.065, 1.0);
 				    rt_planner.getRobotTrajectoryMsg(plan.trajectory_);
 
 				    screenTrajectory(&plan.trajectory_);
