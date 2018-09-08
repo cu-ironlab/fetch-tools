@@ -237,6 +237,7 @@ void moveToStartingPose()
 
 void resetPosition(const std_msgs::String& msg)
 {
+	actionlib::SimpleActionClient<control_msgs::GripperCommandAction> gripperClient("/gripper_controller/gripper_action");
 	actively_listening = false;
 	std_msgs::String pause_msg;
 	pause_msg.data = "ACTIVE";
@@ -244,13 +245,19 @@ void resetPosition(const std_msgs::String& msg)
 	resume_msg.data = "INACTIVE";
 
 	gripper_status.publish(pause_msg);
-	sleep(0.5);
+	sleep(0.75);
 	move_group->stop();
 	controls_updated = false;
 	control_signals[0] = 0.0;
 	control_signals[1] = 0.0;
 	control_signals[2] = 0.0;
 	trajectory_status = TRAJECTORY_ACTIVE;
+
+	control_msgs::GripperCommandGoal srv;
+	srv.command.position = 0.1;
+	srv.command.max_effort = 75;
+	gripperClient.cancelAllGoals();
+	gripperClient.sendGoalAndWait(srv, ros::Duration(5,0), ros::Duration(5,0));
 	sleep(1.0);
 	moveToStartingPose();
 	gripper_status.publish(resume_msg);
