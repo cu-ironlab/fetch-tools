@@ -356,7 +356,7 @@ int main(int argc, char **argv)
 			    	moveit::core::RobotState r_state(*(move_group->getCurrentState()));
 			    	moveit::core::robotStateToRobotStateMsg(r_state, plan.start_state_);
 			    	rt_planner.setRobotTrajectoryMsg(r_state, plan.trajectory_);
-				    time_planner.computeTimeStamps(rt_planner, 0.055, 1.0);
+				    time_planner.computeTimeStamps(rt_planner, 0.045, 1.0);
 				    rt_planner.getRobotTrajectoryMsg(plan.trajectory_);
 
 				    screenTrajectory(&plan.trajectory_);
